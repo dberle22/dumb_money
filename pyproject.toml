@@ -1,0 +1,42 @@
+[project]
+name = "dumb-money"
+version = "0.1.0"
+description = "Modular investment research tool for company analysis, sector context, and portfolio fit."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.2",
+    "pydantic>=2.8",
+    "yfinance>=0.2.65",
+    "yahooquery>=2.4.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ipykernel>=6.29",
+    "jupyter>=1.1",
+    "pytest>=8.3",
+    "ruff>=0.6",
+]
+viz = [
+    "matplotlib>=3.9",
+    "plotly>=5.24",
+    "streamlit>=1.39",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
