@@ -1,0 +1,61 @@
+from datetime import date
+
+from dumb_money.ingestion.fundamentals import flatten_dict, normalize_fundamentals_payload
+
+
+def test_flatten_dict_creates_dotted_keys() -> None:
+    flattened = flatten_dict({"price": {"marketCap": 10}, "asset_profile": {"sector": "Tech"}})
+
+    assert flattened == {"price.marketCap": 10, "asset_profile.sector": "Tech"}
+
+
+def test_normalize_fundamentals_payload_maps_core_fields() -> None:
+    raw_payload = {
+        "price": {
+            "longName": "Apple Inc.",
+            "marketCap": 3000000000,
+            "currency": "usd",
+            "sharesOutstanding": 1000,
+        },
+        "summary_detail": {
+            "trailingPE": 30.5,
+            "forwardPE": 28.1,
+            "dividendYield": 0.005,
+        },
+        "financial_data": {
+            "financialCurrency": "usd",
+            "totalRevenue": 500000,
+            "grossProfits": 210000,
+            "ebitda": 170000,
+            "freeCashflow": 120000,
+            "totalDebt": 75000,
+            "totalCash": 60000,
+            "grossMargins": 0.42,
+            "operatingMargins": 0.31,
+            "profitMargins": 0.24,
+            "returnOnEquity": 1.52,
+            "returnOnAssets": 0.22,
+            "debtToEquity": 180.0,
+            "currentRatio": 1.1,
+        },
+        "asset_profile": {
+            "sector": "Technology",
+            "industry": "Consumer Electronics",
+            "website": "https://www.apple.com",
+        },
+        "key_stats": {
+            "enterpriseValue": 3200000000,
+            "enterpriseToEbitda": 18.8,
+        },
+    }
+
+    snapshot = normalize_fundamentals_payload("aapl", raw_payload, as_of_date=date(2024, 6, 30))
+
+    assert snapshot.ticker == "AAPL"
+    assert snapshot.currency == "USD"
+    assert snapshot.long_name == "Apple Inc."
+    assert snapshot.market_cap == 3000000000
+    assert snapshot.enterprise_value == 3200000000
+    assert snapshot.revenue_ttm == 500000
+    assert snapshot.trailing_pe == 30.5
+    assert snapshot.sector == "Technology"
