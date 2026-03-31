@@ -36,10 +36,10 @@ Assessment date: `2026-03-30`
 
 - Sprint 0 is complete:
   the repo has a consolidated top-level structure, one `pyproject.toml`, one `src/dumb_money/` package tree, a working `.gitignore`, legacy material isolated under `legacy/`, and a documented working local setup path on Python 3.12
-- Sprint 1 is in progress:
-  shared settings, canonical models, price ingestion, fundamentals ingestion, and initial tests already exist in code
-- Sprint 1 is not yet complete:
-  there is no benchmark ingestion module yet, no real CLI or script entry points, and no fixture library under `tests/fixtures/`
+- Sprint 1 is complete:
+  benchmark ingestion now exists, the repo has a callable CLI entry point for prices, fundamentals, and benchmarks, and fixture-backed tests cover both ticker and benchmark ingestion paths
+- Sprint 2 is complete:
+  normalized staging transforms, benchmark sets, a first security master build, and a staging CLI path now exist with passing transform coverage
 - The default dependency path now installs cleanly with `yfinance` as the required provider, while `yahooquery` has been moved to an optional `marketdata` extra
 - Local verification now works in `.venv` on Python `3.12.13`:
   `python -m pytest -q` passes and `python -m ruff check .` passes
@@ -50,8 +50,8 @@ Assessment date: `2026-03-30`
 | Sprint | Theme | Phase | Status | Target Outcome |
 |---|---|---|---|---|
 | 0 | Repo consolidation | Phase 0 | Done | Clean repo with one package structure and one dependency flow |
-| 1 | Shared ingestion foundation | Phase 1 | In Progress | Reusable config, schemas, and ingestion entry points |
-| 2 | Normalized staging layer | Phase 2 | Not Started | Canonical datasets for prices, fundamentals, security master, and benchmarks |
+| 1 | Shared ingestion foundation | Phase 1 | Done | Reusable config, schemas, and ingestion entry points |
+| 2 | Normalized staging layer | Phase 2 | Done | Canonical datasets for prices, fundamentals, security master, and benchmarks |
 | 3 | Company research MVP | Phase 3 | Not Started | First end-to-end single-company research packet |
 | 4 | Portfolio fit MVP | Phase 5 | Not Started | Holdings import and candidate fit analysis on shared data |
 | 5 | Sector and peer research MVP | Phase 4 | Not Started | Sector context and peer-relative research outputs |
@@ -122,7 +122,7 @@ Turn the repo into a clean, single-project codebase with a stable top-level stru
 
 ## Sprint 1: Shared Ingestion Foundation
 
-**Status:** In Progress
+**Status:** Done
 
 **Goal**
 
@@ -143,10 +143,10 @@ Create the shared configuration, schemas, and ingestion modules that all researc
 - [x] create shared config/settings module for paths, providers, and defaults
 - [x] refactor price ingestion logic into `src/dumb_money/ingestion/prices.py`
 - [x] refactor fundamentals ingestion logic into `src/dumb_money/ingestion/fundamentals.py`
-- [ ] create `src/dumb_money/ingestion/benchmarks.py`
+- [x] create `src/dumb_money/ingestion/benchmarks.py`
 - [x] define raw file naming conventions and output path helpers
-- [ ] add entry points in `scripts/` or `src/dumb_money/cli/`
-- [ ] add fixtures for at least one ticker and one benchmark path
+- [x] add entry points in `scripts/` or `src/dumb_money/cli/`
+- [x] add fixtures for at least one ticker and one benchmark path
 - [x] add initial tests covering config resolution and ingestion contracts
 
 **Acceptance Criteria**
@@ -166,15 +166,15 @@ Create the shared configuration, schemas, and ingestion modules that all researc
 
 - Links:
 - Current implementation evidence:
-  `src/dumb_money/config/settings.py`, `src/dumb_money/models/`, `src/dumb_money/ingestion/prices.py`, `src/dumb_money/ingestion/fundamentals.py`, and initial tests under `tests/`
-- Remaining gap to close this sprint:
-  benchmark ingestion plus runnable entry points are the biggest missing pieces
+  `src/dumb_money/config/settings.py`, `src/dumb_money/models/`, `src/dumb_money/ingestion/prices.py`, `src/dumb_money/ingestion/fundamentals.py`, `src/dumb_money/ingestion/benchmarks.py`, `src/dumb_money/cli/main.py`, and fixture-backed tests under `tests/`
+- Verification snapshot:
+  `.venv/bin/python -m pytest -q` passes and `.venv/bin/python -m ruff check .` passes on `2026-03-30`
 - Environment note:
   the working local setup now uses Python 3.12, the default install path is unblocked, and `yahooquery` is optional rather than required
 
 ## Sprint 2: Normalized Staging Layer
 
-**Status:** Not Started
+**Status:** Done
 
 **Goal**
 
@@ -190,14 +190,14 @@ Transform raw provider outputs into canonical staging datasets that downstream a
 
 **Tasks**
 
-- [ ] implement price normalization transforms into `data/staging/normalized_prices/`
-- [ ] implement fundamentals normalization transforms into `data/staging/normalized_fundamentals/`
-- [ ] create security master build logic in `src/dumb_money/transforms/`
-- [ ] create benchmark set generation logic
-- [ ] enforce canonical field names and type coercion rules
-- [ ] handle missing `adj_close` fallback logic consistently
-- [ ] add transform validation tests for representative raw inputs
-- [ ] document staging output contracts in [data_models.md] if implementation expands them
+- [x] implement price normalization transforms into `data/staging/normalized_prices/`
+- [x] implement fundamentals normalization transforms into `data/staging/normalized_fundamentals/`
+- [x] create security master build logic in `src/dumb_money/transforms/`
+- [x] create benchmark set generation logic
+- [x] enforce canonical field names and type coercion rules
+- [x] handle missing `adj_close` fallback logic consistently
+- [x] add transform validation tests for representative raw inputs
+- [x] document staging output contracts in [data_models.md] if implementation expands them
 
 **Acceptance Criteria**
 
@@ -214,6 +214,10 @@ Transform raw provider outputs into canonical staging datasets that downstream a
 **Notes**
 
 - Links:
+- Current implementation evidence:
+  `src/dumb_money/transforms/prices.py`, `src/dumb_money/transforms/fundamentals.py`, `src/dumb_money/transforms/security_master.py`, `src/dumb_money/transforms/benchmark_sets.py`, and `src/dumb_money/cli/main.py`
+- Verification snapshot:
+  `.venv/bin/python -m pytest -q` passes and `.venv/bin/python -m ruff check .` passes on `2026-03-30`
 
 ## Sprint 3: Company Research MVP
 

@@ -1,5 +1,7 @@
 from datetime import date
 
+import pytest
+
 from dumb_money.ingestion.fundamentals import (
     collect_fundamentals_payload,
     flatten_dict,
@@ -25,7 +27,9 @@ def test_normalize_fundamentals_payload_maps_core_fields() -> None:
         "summary_detail": {
             "trailingPE": 30.5,
             "forwardPE": 28.1,
-            "dividendYield": 0.005,
+            "dividendYield": 0.5,
+            "dividendRate": 1.0,
+            "currentPrice": 200.0,
         },
         "financial_data": {
             "financialCurrency": "usd",
@@ -64,12 +68,29 @@ def test_normalize_fundamentals_payload_maps_core_fields() -> None:
     assert snapshot.revenue_ttm == 500000
     assert snapshot.trailing_pe == 30.5
     assert snapshot.sector == "Technology"
+    assert snapshot.dividend_yield == 0.005
 
 
 def test_normalize_fundamentals_payload_defaults_to_yfinance_source() -> None:
     snapshot = normalize_fundamentals_payload("msft", {"price": {"currency": "usd"}}, as_of_date=date(2024, 6, 30))
 
     assert snapshot.source == DataSource.YFINANCE
+
+
+def test_normalize_fundamentals_payload_normalizes_yfinance_dividend_yield_percent_units() -> None:
+    raw_payload = {
+        "price": {"currency": "USD", "currentPrice": 250.0},
+        "summary_detail": {"dividendYield": 0.42, "dividendRate": 1.05, "currentPrice": 250.0},
+    }
+
+    snapshot = normalize_fundamentals_payload(
+        "aapl",
+        raw_payload,
+        as_of_date=date(2024, 6, 30),
+        source=DataSource.YFINANCE,
+    )
+
+    assert snapshot.dividend_yield == pytest.approx(0.0042)
 
 
 def test_collect_fundamentals_payload_falls_back_to_yfinance(monkeypatch) -> None:

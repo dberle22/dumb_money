@@ -10,6 +10,9 @@ dependencies = [
     "yfinance>=0.2.65",
 ]
 
+[project.scripts]
+dumb-money = "dumb_money.cli.main:main"
+
 [project.optional-dependencies]
 dev = [
     "ipykernel>=6.29",

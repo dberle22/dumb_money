@@ -62,6 +62,29 @@ def _first_number(raw: Mapping[str, Any], *keys: str) -> float | None:
     return None
 
 
+def _normalize_dividend_yield(
+    raw: Mapping[str, Any],
+    *,
+    source: DataSource | str,
+) -> float | None:
+    """Return dividend yield as a fraction, regardless of provider conventions."""
+
+    resolved_source = DataSource(str(source))
+    dividend_rate = _first_number(raw, "summary_detail.dividendRate", "price.dividendRate")
+    current_price = _first_number(raw, "summary_detail.currentPrice", "price.currentPrice")
+    if dividend_rate is not None and current_price not in (None, 0):
+        return dividend_rate / current_price
+
+    raw_yield = _first_number(raw, "summary_detail.dividendYield")
+    if raw_yield is None:
+        return None
+
+    if resolved_source is DataSource.YFINANCE:
+        return raw_yield / 100 if raw_yield > 0 else raw_yield
+
+    return raw_yield
+
+
 def collect_yahooquery_fundamentals(ticker: str) -> dict[str, Any]:
     """Pull the core YahooQuery fundamentals blocks for one ticker."""
 
@@ -94,11 +117,14 @@ def collect_yfinance_fundamentals(ticker: str) -> dict[str, Any]:
         "shortName": info.get("shortName"),
         "marketCap": info.get("marketCap"),
         "sharesOutstanding": info.get("sharesOutstanding"),
+        "currentPrice": info.get("currentPrice"),
     }
     summary_detail = {
         "trailingPE": info.get("trailingPE"),
         "forwardPE": info.get("forwardPE"),
         "dividendYield": info.get("dividendYield"),
+        "dividendRate": info.get("dividendRate"),
+        "currentPrice": info.get("currentPrice"),
         "marketCap": info.get("marketCap"),
         "priceToSalesTrailing12Months": info.get("priceToSalesTrailing12Months"),
         "trailingEps": info.get("trailingEps"),
@@ -222,7 +248,7 @@ def normalize_fundamentals_payload(
         forward_pe=_first_number(flat, "summary_detail.forwardPE"),
         price_to_sales=_first_number(flat, "summary_detail.priceToSalesTrailing12Months"),
         ev_to_ebitda=_first_number(flat, "key_stats.enterpriseToEbitda"),
-        dividend_yield=_first_number(flat, "summary_detail.dividendYield"),
+        dividend_yield=_normalize_dividend_yield(flat, source=source),
         raw_payload_path=raw_payload_path,
         pulled_at=pulled_at,
     )

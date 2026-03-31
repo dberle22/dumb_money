@@ -57,3 +57,22 @@ def test_normalize_price_history_frame_fills_adj_close_from_close() -> None:
     normalized = normalize_price_history_frame(raw, "spy", source="yfinance")
 
     assert normalized.loc[0, "adj_close"] == 10.5
+
+
+def test_normalize_price_history_frame_handles_yfinance_multiindex_columns() -> None:
+    raw = pd.DataFrame(
+        {
+            ("Date", ""): ["2024-01-02"],
+            ("Open", "AAPL"): [10.0],
+            ("High", "AAPL"): [11.0],
+            ("Low", "AAPL"): [9.5],
+            ("Close", "AAPL"): [10.5],
+            ("Adj Close", "AAPL"): [10.4],
+            ("Volume", "AAPL"): [100],
+        }
+    )
+
+    normalized = normalize_price_history_frame(raw, "aapl", source="yfinance")
+
+    assert normalized.loc[0, "ticker"] == "AAPL"
+    assert normalized.loc[0, "date"] == date(2024, 1, 2)

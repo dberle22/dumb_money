@@ -145,4 +145,37 @@ These schemas are enough to begin the earliest normalization layer:
 - `security_master`: initial stitched security metadata table
 - `benchmark_sets`: grouped benchmark membership definitions
 
+Suggested stored columns for the Phase 2 staging outputs:
+
+### normalized_prices
+
+- same canonical columns as `PriceBar`
+- produced from raw price extracts after type coercion, ticker and currency normalization, deduplication, and `adj_close` fallback to `close` when needed
+
+### normalized_fundamentals
+
+- same canonical columns as `FundamentalSnapshot`
+- produced from raw flattened snapshots after type coercion, ticker and currency normalization, and one-row-per-`ticker`-and-`as_of_date` deduplication
+
+### security_master
+
+- same canonical columns as `Security`
+- built by stitching latest normalized fundamentals metadata with benchmark definitions
+- intended to provide a lightweight join key table before a fuller security master exists
+
+### benchmark_sets
+
+Canonical MVP columns:
+
+- `set_id`: stable grouping identifier for a reusable benchmark set
+- `benchmark_id`: stable benchmark definition identifier
+- `ticker`: benchmark symbol
+- `name`: display name
+- `category`: benchmark category
+- `scope`: optional grouping scope
+- `currency`: benchmark currency
+- `description`: free-text notes
+- `member_order`: explicit display or processing order inside the set
+- `is_default`: marks default packaged sets versus ad hoc sets
+
 These outputs should remain file-based for the MVP before introducing DuckDB or a heavier persistence layer.
