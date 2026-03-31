@@ -8,7 +8,6 @@ dependencies = [
     "pandas>=2.2",
     "pydantic>=2.8",
     "yfinance>=0.2.65",
-    "yahooquery>=2.4.1",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +21,9 @@ viz = [
     "matplotlib>=3.9",
     "plotly>=5.24",
     "streamlit>=1.39",
+]
+marketdata = [
+    "yahooquery>=2.4.1",
 ]
 
 [build-system]

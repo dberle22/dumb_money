@@ -22,7 +22,7 @@ class PriceBar(BaseModel):
     ticker: str = Field(min_length=1)
     date: date
     interval: str = "1d"
-    source: DataSource = DataSource.YAHOOQUERY
+    source: DataSource = DataSource.YFINANCE
     currency: str = "USD"
     open: float
     high: float
@@ -52,7 +52,7 @@ class FundamentalSnapshot(BaseModel):
 
     ticker: str = Field(min_length=1)
     as_of_date: date
-    source: DataSource = DataSource.YAHOOQUERY
+    source: DataSource = DataSource.YFINANCE
     currency: str = "USD"
     long_name: str | None = None
     sector: str | None = None

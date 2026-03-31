@@ -1,5 +1,8 @@
 # macOS
 .DS_Store
+.DS_STORE
+**/.DS_Store
+**/.DS_STORE
 
 # Python
 __pycache__/
@@ -10,6 +13,7 @@ __pycache__/
 
 # Virtual environments
 .venv/
+.venv_*/
 venv/
 env/
 

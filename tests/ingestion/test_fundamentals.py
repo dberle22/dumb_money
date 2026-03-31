@@ -1,6 +1,11 @@
 from datetime import date
 
-from dumb_money.ingestion.fundamentals import flatten_dict, normalize_fundamentals_payload
+from dumb_money.ingestion.fundamentals import (
+    collect_fundamentals_payload,
+    flatten_dict,
+    normalize_fundamentals_payload,
+)
+from dumb_money.models import DataSource
 
 
 def test_flatten_dict_creates_dotted_keys() -> None:
@@ -59,3 +64,31 @@ def test_normalize_fundamentals_payload_maps_core_fields() -> None:
     assert snapshot.revenue_ttm == 500000
     assert snapshot.trailing_pe == 30.5
     assert snapshot.sector == "Technology"
+
+
+def test_normalize_fundamentals_payload_defaults_to_yfinance_source() -> None:
+    snapshot = normalize_fundamentals_payload("msft", {"price": {"currency": "usd"}}, as_of_date=date(2024, 6, 30))
+
+    assert snapshot.source == DataSource.YFINANCE
+
+
+def test_collect_fundamentals_payload_falls_back_to_yfinance(monkeypatch) -> None:
+    def fake_yahooquery(_ticker: str) -> dict[str, object]:
+        raise ModuleNotFoundError("yahooquery")
+
+    def fake_yfinance(_ticker: str) -> dict[str, object]:
+        return {"price": {"currency": "USD", "longName": "Fallback Co"}}
+
+    monkeypatch.setattr(
+        "dumb_money.ingestion.fundamentals.collect_yahooquery_fundamentals",
+        fake_yahooquery,
+    )
+    monkeypatch.setattr(
+        "dumb_money.ingestion.fundamentals.collect_yfinance_fundamentals",
+        fake_yfinance,
+    )
+
+    payload, source = collect_fundamentals_payload("AAPL", provider=DataSource.YAHOOQUERY)
+
+    assert payload["price"]["longName"] == "Fallback Co"
+    assert source == DataSource.YFINANCE

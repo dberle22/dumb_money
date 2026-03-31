@@ -30,12 +30,27 @@ Supporting references:
 - Prefer stable data contracts and repeatable workflows over fast one-off prototypes
 - Only advance to the next phase when the prior phase has a working handoff
 
+## Current Assessment
+
+Assessment date: `2026-03-30`
+
+- Sprint 0 is complete:
+  the repo has a consolidated top-level structure, one `pyproject.toml`, one `src/dumb_money/` package tree, a working `.gitignore`, legacy material isolated under `legacy/`, and a documented working local setup path on Python 3.12
+- Sprint 1 is in progress:
+  shared settings, canonical models, price ingestion, fundamentals ingestion, and initial tests already exist in code
+- Sprint 1 is not yet complete:
+  there is no benchmark ingestion module yet, no real CLI or script entry points, and no fixture library under `tests/fixtures/`
+- The default dependency path now installs cleanly with `yfinance` as the required provider, while `yahooquery` has been moved to an optional `marketdata` extra
+- Local verification now works in `.venv` on Python `3.12.13`:
+  `python -m pytest -q` passes and `python -m ruff check .` passes
+- The repo has the intended `data/raw/`, `data/staging/`, and `data/marts/` directory layout in place, but no populated datasets yet
+
 ## Status Snapshot
 
 | Sprint | Theme | Phase | Status | Target Outcome |
 |---|---|---|---|---|
-| 0 | Repo consolidation | Phase 0 | Not Started | Clean repo with one package structure and one dependency flow |
-| 1 | Shared ingestion foundation | Phase 1 | Not Started | Reusable config, schemas, and ingestion entry points |
+| 0 | Repo consolidation | Phase 0 | Done | Clean repo with one package structure and one dependency flow |
+| 1 | Shared ingestion foundation | Phase 1 | In Progress | Reusable config, schemas, and ingestion entry points |
 | 2 | Normalized staging layer | Phase 2 | Not Started | Canonical datasets for prices, fundamentals, security master, and benchmarks |
 | 3 | Company research MVP | Phase 3 | Not Started | First end-to-end single-company research packet |
 | 4 | Portfolio fit MVP | Phase 5 | Not Started | Holdings import and candidate fit analysis on shared data |
@@ -60,7 +75,7 @@ Supporting references:
 
 ## Sprint 0: Repo Consolidation
 
-**Status:** Not Started
+**Status:** Done
 
 **Goal**
 
@@ -75,13 +90,13 @@ Turn the repo into a clean, single-project codebase with a stable top-level stru
 
 **Tasks**
 
-- [ ] confirm top-level directories match the target structure in the roadmap
-- [ ] confirm `pyproject.toml` is the single dependency entry point
-- [ ] confirm `.gitignore` covers local envs, notebook artifacts, raw caches, and generated outputs as intended
-- [ ] audit `legacy/` contents and document which files remain source references versus migration candidates
-- [ ] move any remaining reusable legacy code into transitional locations if needed
-- [ ] document environment setup in `README.md`
-- [ ] create a short migration note section in docs or roadmap if repo cleanup decisions need to be preserved
+- [x] confirm top-level directories match the target structure in the roadmap
+- [x] confirm `pyproject.toml` is the single dependency entry point
+- [x] confirm `.gitignore` covers local envs, notebook artifacts, raw caches, and generated outputs as intended
+- [x] audit `legacy/` contents and document which files remain source references versus migration candidates
+- [x] move any remaining reusable legacy code into transitional locations if needed
+- [x] isolate imported source material under `legacy/` rather than active package code
+- [x] create the foundational repo structure for `app/`, `data/`, `docs/`, `notebooks/`, `reports/`, `src/`, and `tests/`
 
 **Acceptance Criteria**
 
@@ -98,10 +113,16 @@ Turn the repo into a clean, single-project codebase with a stable top-level stru
 **Notes**
 
 - Links:
+- Follow-up cleanup:
+  committed `.DS_Store` files still exist under `legacy/`; `.gitignore` now covers them, but they should be removed from git in a later housekeeping pass if we want a fully clean index
+- Environment setup:
+  `README.md` now includes project setup, install, lint, and test commands, and the repo has a working verified `.venv` on Python 3.12
+- Dependency note:
+  core installs use `yfinance`; `yahooquery` is now optional via the `marketdata` extra so environment setup is not blocked by that dependency chain
 
 ## Sprint 1: Shared Ingestion Foundation
 
-**Status:** Not Started
+**Status:** In Progress
 
 **Goal**
 
@@ -118,15 +139,15 @@ Create the shared configuration, schemas, and ingestion modules that all researc
 
 **Tasks**
 
-- [ ] implement or refine canonical Pydantic models based on [data_models.md]
-- [ ] create shared config/settings module for paths, providers, and defaults
-- [ ] refactor price ingestion logic into `src/dumb_money/ingestion/prices.py`
-- [ ] refactor fundamentals ingestion logic into `src/dumb_money/ingestion/fundamentals.py`
+- [x] implement or refine canonical Pydantic models based on [data_models.md]
+- [x] create shared config/settings module for paths, providers, and defaults
+- [x] refactor price ingestion logic into `src/dumb_money/ingestion/prices.py`
+- [x] refactor fundamentals ingestion logic into `src/dumb_money/ingestion/fundamentals.py`
 - [ ] create `src/dumb_money/ingestion/benchmarks.py`
-- [ ] define raw file naming conventions and output path helpers
+- [x] define raw file naming conventions and output path helpers
 - [ ] add entry points in `scripts/` or `src/dumb_money/cli/`
 - [ ] add fixtures for at least one ticker and one benchmark path
-- [ ] add initial tests covering config resolution and ingestion contracts
+- [x] add initial tests covering config resolution and ingestion contracts
 
 **Acceptance Criteria**
 
@@ -144,6 +165,12 @@ Create the shared configuration, schemas, and ingestion modules that all researc
 **Notes**
 
 - Links:
+- Current implementation evidence:
+  `src/dumb_money/config/settings.py`, `src/dumb_money/models/`, `src/dumb_money/ingestion/prices.py`, `src/dumb_money/ingestion/fundamentals.py`, and initial tests under `tests/`
+- Remaining gap to close this sprint:
+  benchmark ingestion plus runnable entry points are the biggest missing pieces
+- Environment note:
+  the working local setup now uses Python 3.12, the default install path is unblocked, and `yahooquery` is optional rather than required
 
 ## Sprint 2: Normalized Staging Layer
 

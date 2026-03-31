@@ -78,12 +78,104 @@ def collect_yahooquery_fundamentals(ticker: str) -> dict[str, Any]:
     return {name: block for name, block in blocks.items() if block}
 
 
+def collect_yfinance_fundamentals(ticker: str) -> dict[str, Any]:
+    """Pull a best-effort fundamentals payload from yfinance."""
+
+    import yfinance as yf
+
+    client = yf.Ticker(ticker)
+    info = client.info or {}
+    if not isinstance(info, Mapping) or not info:
+        return {}
+
+    price = {
+        "currency": info.get("currency"),
+        "longName": info.get("longName") or info.get("shortName"),
+        "shortName": info.get("shortName"),
+        "marketCap": info.get("marketCap"),
+        "sharesOutstanding": info.get("sharesOutstanding"),
+    }
+    summary_detail = {
+        "trailingPE": info.get("trailingPE"),
+        "forwardPE": info.get("forwardPE"),
+        "dividendYield": info.get("dividendYield"),
+        "marketCap": info.get("marketCap"),
+        "priceToSalesTrailing12Months": info.get("priceToSalesTrailing12Months"),
+        "trailingEps": info.get("trailingEps"),
+        "forwardEps": info.get("forwardEps"),
+    }
+    key_stats = {
+        "enterpriseValue": info.get("enterpriseValue"),
+        "enterpriseToEbitda": info.get("enterpriseToEbitda"),
+        "sharesOutstanding": info.get("sharesOutstanding"),
+    }
+    financial_data = {
+        "financialCurrency": info.get("financialCurrency") or info.get("currency"),
+        "totalRevenue": info.get("totalRevenue"),
+        "grossProfits": info.get("grossProfits"),
+        "operatingCashflow": info.get("operatingCashflow"),
+        "ebitda": info.get("ebitda"),
+        "freeCashflow": info.get("freeCashflow"),
+        "totalDebt": info.get("totalDebt"),
+        "totalCash": info.get("totalCash"),
+        "grossMargins": info.get("grossMargins"),
+        "operatingMargins": info.get("operatingMargins"),
+        "profitMargins": info.get("profitMargins"),
+        "returnOnEquity": info.get("returnOnEquity"),
+        "returnOnAssets": info.get("returnOnAssets"),
+        "debtToEquity": info.get("debtToEquity"),
+        "currentRatio": info.get("currentRatio"),
+        "netIncomeToCommon": info.get("netIncomeToCommon"),
+    }
+    asset_profile = {
+        "sector": info.get("sector"),
+        "industry": info.get("industry"),
+        "website": info.get("website"),
+    }
+
+    payload = {
+        "price": {key: value for key, value in price.items() if value is not None},
+        "summary_detail": {
+            key: value for key, value in summary_detail.items() if value is not None
+        },
+        "key_stats": {key: value for key, value in key_stats.items() if value is not None},
+        "financial_data": {
+            key: value for key, value in financial_data.items() if value is not None
+        },
+        "asset_profile": {key: value for key, value in asset_profile.items() if value is not None},
+    }
+    return {name: block for name, block in payload.items() if block}
+
+
+def collect_fundamentals_payload(
+    ticker: str,
+    *,
+    provider: DataSource | str = DataSource.YFINANCE,
+) -> tuple[dict[str, Any], DataSource]:
+    """Collect fundamentals from the requested provider with graceful fallback."""
+
+    resolved_provider = DataSource(str(provider))
+
+    if resolved_provider is DataSource.YAHOOQUERY:
+        try:
+            payload = collect_yahooquery_fundamentals(ticker)
+        except ModuleNotFoundError:
+            payload = {}
+        if payload:
+            return payload, DataSource.YAHOOQUERY
+        fallback_payload = collect_yfinance_fundamentals(ticker)
+        return fallback_payload, DataSource.YFINANCE
+
+    payload = collect_yfinance_fundamentals(ticker)
+    return payload, DataSource.YFINANCE
+
+
 def normalize_fundamentals_payload(
     ticker: str,
     raw_payload: Mapping[str, Any],
     *,
     as_of_date: date | str,
-    source: DataSource | str = DataSource.YAHOOQUERY,
+    source: DataSource | str = DataSource.YFINANCE,
     raw_payload_path: str | None = None,
     pulled_at: datetime | None = None,
 ) -> FundamentalSnapshot:
@@ -159,6 +251,7 @@ def ingest_fundamentals(
     settings: AppSettings | None = None,
     save_raw_json: bool = True,
     save_flat_csv: bool = True,
+    provider: DataSource | str = DataSource.YFINANCE,
 ) -> pd.DataFrame:
     """Download and persist fundamentals snapshots for a set of tickers."""
 
@@ -170,7 +263,7 @@ def ingest_fundamentals(
 
     for ticker in dict.fromkeys(str(item).strip().upper() for item in tickers if str(item).strip()):
         pulled_at = datetime.utcnow()
-        payload = collect_yahooquery_fundamentals(ticker)
+        payload, resolved_source = collect_fundamentals_payload(ticker, provider=provider)
         if not payload:
             continue
 
@@ -187,6 +280,7 @@ def ingest_fundamentals(
             ticker,
             payload,
             as_of_date=resolved_as_of,
+            source=resolved_source,
             raw_payload_path=raw_path,
             pulled_at=pulled_at,
         )
