@@ -43,7 +43,8 @@ Assessment date: `2026-03-30`
 - The default dependency path now installs cleanly with `yfinance` as the required provider, while `yahooquery` has been moved to an optional `marketdata` extra
 - Local verification now works in `.venv` on Python `3.12.13`:
   `python -m pytest -q` passes and `python -m ruff check .` passes
-- The repo has the intended `data/raw/`, `data/staging/`, and `data/marts/` directory layout in place, but no populated datasets yet
+- The repo has populated local `data/raw/` and `data/staging/` datasets for a small sample universe, including `AAPL`, `STNE`, `ISRG`, `META`, `SNOW`, `CRM`, and benchmarks `SPY`, `QQQ`, `IWM`
+- CSV-backed staging has been sufficient for the first small-universe workflows, but the next data-model phase should introduce a project DuckDB warehouse for scaled normalized and derived datasets
 
 ## Status Snapshot
 
@@ -52,12 +53,13 @@ Assessment date: `2026-03-30`
 | 0 | Repo consolidation | Phase 0 | Done | Clean repo with one package structure and one dependency flow |
 | 1 | Shared ingestion foundation | Phase 1 | Done | Reusable config, schemas, and ingestion entry points |
 | 2 | Normalized staging layer | Phase 2 | Done | Canonical datasets for prices, fundamentals, security master, and benchmarks |
-| 3 | Company research MVP | Phase 3 | Not Started | First end-to-end single-company research packet |
-| 4 | Portfolio fit MVP | Phase 5 | Not Started | Holdings import and candidate fit analysis on shared data |
+| 3 | Company research MVP | Phase 3 | In Progress | First end-to-end single-company research packet |
+| 4 | Data foundation expansion | Phase 3 foundation | Not Started | Scalable shared datasets, benchmark mappings, and DuckDB storage |
 | 5 | Sector and peer research MVP | Phase 4 | Not Started | Sector context and peer-relative research outputs |
 | 6 | Reporting standardization | Phase 6 | Not Started | Repeatable report exports, scorecards, and chart helpers |
-| 7 | App layer MVP | Phase 7 | Not Started | Local Streamlit app powered by shared modules |
-| 8 | LLM summaries | Phase 8 | Not Started | Narrative summaries generated from structured outputs |
+| 7 | Portfolio fit MVP | Phase 5 | Not Started | Holdings import and candidate fit analysis on shared data |
+| 8 | App layer MVP | Phase 7 | Not Started | Local Streamlit app powered by shared modules |
+| 9 | LLM summaries | Phase 8 | Not Started | Narrative summaries generated from structured outputs |
 
 ## Phase Map
 
@@ -67,9 +69,10 @@ Assessment date: `2026-03-30`
 | 1 | Build shared data foundation | Phase 0 | Repeatable Market Data Pipeline |
 | 2 | Normalize raw data into canonical datasets | Phase 1 | Repeatable Market Data Pipeline |
 | 3 | Deliver company research MVP | Phase 2 | Company Research Workflow |
-| 5 | Deliver portfolio fit MVP | Phase 3 | Portfolio Fit Workflow |
+| 3 foundation | Expand scalable shared datasets and storage | Phase 3 | Expanded Shared Data Foundation |
 | 4 | Add sector and peer context | Phase 3 | Expanded research context ready for reports and UI |
-| 6 | Standardize reporting outputs | Phases 3, 4, 5 | Report-ready research artifacts |
+| 6 | Standardize reporting outputs | Phases 3, 3 foundation, 4 | Report-ready research artifacts |
+| 5 | Deliver portfolio fit MVP | Phases 3, 3 foundation, 6 | Portfolio Fit Workflow |
 | 7 | Expose workflows in app | Phases 4, 5, 6 | Usable Research App |
 | 8 | Add LLM-assisted summaries | Phase 7 and stable structured outputs | Narrative insight layer |
 
@@ -221,7 +224,7 @@ Transform raw provider outputs into canonical staging datasets that downstream a
 
 ## Sprint 3: Company Research MVP
 
-**Status:** Not Started
+**Status:** In Progress
 
 **Goal**
 
@@ -234,17 +237,20 @@ Deliver the first complete company research workflow for a single ticker using t
 - company scorecard
 - company research notebook or report packet
 - standard charts and tables for one ticker
+- narrative-oriented notebook flow aligned to the scorecard visual spec
 
 **Tasks**
 
-- [ ] implement return calculations across standard windows
-- [ ] implement volatility, drawdown, and relative strength metrics
-- [ ] implement moving average and simple trend metrics
-- [ ] build a fundamentals summary layer from normalized snapshots
-- [ ] implement company versus benchmark comparison outputs
-- [ ] define company scorecard structure and scoring rules
-- [ ] create a notebook in `notebooks/02_company_research/` using shared modules only
-- [ ] add tests for core analytics calculations
+- [x] implement return calculations across standard windows
+- [x] implement volatility, drawdown, and relative strength metrics
+- [x] implement moving average and simple trend metrics
+- [x] build a fundamentals summary layer from normalized snapshots
+- [x] implement company versus benchmark comparison outputs
+- [x] define company scorecard structure and scoring rules
+- [x] create a notebook in `notebooks/02_company_research/` using shared modules only
+- [x] add tests for core analytics calculations
+- [ ] align the notebook and shared report helpers to the scorecard visual narrative spec using the visuals supported by current data
+- [x] document the next enabling data-model work for benchmark mapping, historical fundamentals, peer sets, and DuckDB storage without expanding sprint scope to implement them yet
 
 **Acceptance Criteria**
 
@@ -252,6 +258,8 @@ Deliver the first complete company research workflow for a single ticker using t
 - all calculations come from reusable modules, not notebook-only code
 - benchmark comparison outputs match the company scorecard inputs
 - core analytics functions are covered by tests using stable fixtures
+- the first notebook review flow follows a coherent research narrative rather than a disconnected artifact dump
+- the documentation clearly distinguishes Sprint 3 visual work from later data-model expansions
 
 **Exit Criteria**
 
@@ -261,50 +269,140 @@ Deliver the first complete company research workflow for a single ticker using t
 **Notes**
 
 - Links:
+- Current implementation evidence:
+  `src/dumb_money/analytics/company.py`, `src/dumb_money/analytics/scorecard.py`, `src/dumb_money/research/company.py`, `src/dumb_money/outputs/company_report.py`, `notebooks/02_company_research/aapl_company_research.ipynb`, `tests/analytics/test_company.py`, `tests/analytics/test_scorecard.py`, `tests/outputs/test_company_report.py`, and `tests/research/test_company_research.py`
+- Verification snapshot:
+  `.venv/bin/python -m pytest -q` passes and `.venv/bin/python -m ruff check .` passes on `2026-03-31`
+- Scope note:
+  the current sprint now includes refining the single-ticker notebook and shared visuals to match the scorecard narrative spec where current data supports it; benchmark mapping formalization, historical fundamentals, and peer-set modeling are documented follow-on data tasks rather than required Sprint 3 implementation scope
 
-## Sprint 4: Portfolio Fit MVP
+### Sprint 3 Follow-On: Data Model Expansion Plan
+
+This is intentionally documented inside Sprint 3 scope notes rather than treated as completed Sprint 3 implementation work.
+
+Priority follow-on items identified during the first company research workflow:
+
+- expand `security_master` from a small stitched sample into a broader reusable research universe
+- scale `normalized_prices` to match the expanded security universe rather than a manually curated sample list
+- redesign `normalized_fundamentals` to support quarterly, annual, and `TTM` period-aware snapshots
+- split benchmark modeling into reusable definitions, mappings, sets, and custom basket memberships
+- introduce DuckDB as the canonical analytical storage layer for normalized and derived tables, with CSV outputs retained as optional inspection artifacts
+
+## Sprint 4: Data Foundation Expansion
 
 **Status:** Not Started
 
 **Goal**
 
-Use the same shared data foundation to analyze a current portfolio and evaluate a new candidate security.
+Expand the shared analytical data foundation so company, sector, and peer workflows can scale beyond the current CSV-based sample universe.
 
 **Planned Outputs**
 
-- holdings schema and import workflow
-- portfolio metrics and exposure outputs
-- candidate fit analysis
-- portfolio-fit notebook
-- watchlist or decision-support table
+- expanded `security_master` universe and enrichment workflow
+- broader `normalized_prices` coverage aligned to the maintained universe
+- period-aware `normalized_fundamentals` with quarterly, annual, and `TTM` support
+- benchmark mapping and benchmark membership tables
+- DuckDB warehouse for normalized and derived datasets
+- shared loader pattern for canonical analytical tables
 
-**Tasks**
+**Workstreams**
 
-- [ ] finalize holdings schema implementation in code
-- [ ] create holdings import workflow for file-based inputs
-- [ ] build allocation and concentration metrics
-- [ ] build exposure metrics by sector, industry, and position weight where data allows
-- [ ] implement portfolio versus benchmark comparison
-- [ ] implement candidate ticker fit logic against current holdings
-- [ ] define watchlist output structure and scoring fields
-- [ ] create notebook in `notebooks/04_portfolio_fit/`
-- [ ] add tests for holdings parsing and portfolio metric calculations
+### Workstream 1: Storage And Access Layer
+
+Goal:
+make DuckDB the canonical analytical store before the table surface area expands further.
+
+Tasks:
+
+- [ ] define the DuckDB warehouse location, naming convention, and config settings
+- [ ] define canonical table names for normalized and derived datasets
+- [ ] implement shared read and write helpers that prefer DuckDB and allow optional CSV export
+- [ ] document which outputs remain raw-file artifacts versus which become warehouse-backed analytical tables
+- [ ] add tests covering DuckDB write, read, overwrite, and schema checks for a small fixture dataset
+
+### Workstream 2: Security Master Expansion
+
+Goal:
+turn `security_master` into the maintained eligible universe table for downstream ingestion and joins.
+
+Tasks:
+
+- [ ] define the expanded `security_master` schema with lineage, coverage, and active-status fields
+- [ ] choose and document the source strategy for broad universe coverage plus metadata enrichment and manual overrides
+- [ ] implement `security_master` expansion workflow for a larger maintained universe
+- [ ] define the manual override pattern for aliases, classification cleanup, and benchmark exceptions
+- [ ] add validation checks for duplicate tickers, missing classifications, and inactive or unsupported listings
+
+### Workstream 3: Historical Fundamentals Model
+
+Goal:
+upgrade `normalized_fundamentals` into a period-aware historical table that supports quarterly, annual, and `TTM` analysis.
+
+Tasks:
+
+- [ ] redesign `normalized_fundamentals` to include `period_end_date`, `report_date`, `fiscal_year`, `fiscal_quarter`, `fiscal_period`, and `period_type`
+- [ ] support both quarterly and annual fundamentals rows in staging
+- [ ] add any balance-sheet fields needed for historical balance sheet and liquidity analysis when providers support them reliably
+- [ ] define deduplication rules for one row per ticker-period snapshot
+- [ ] add tests covering mixed quarterly and annual fundamentals inputs and expected normalized outputs
+
+### Workstream 4: Benchmark Data Model Split
+
+Goal:
+separate benchmark definitions, default mappings, reusable sets, and custom basket memberships into explicit shared tables.
+
+Tasks:
+
+- [ ] split benchmark data into reusable definitions, mappings, sets, and custom basket memberships
+- [ ] define default assignment logic for `primary_benchmark`, `sector_benchmark`, `industry_benchmark`, `style_benchmark`, and optional `custom_benchmark`
+- [ ] define a benchmark basket membership contract that supports ETFs, indexes, and stocks in one table
+- [ ] add tests covering benchmark mapping resolution and custom basket membership integrity
+
+### Workstream 5: Universe-Aligned Ingestion And Validation
+
+Goal:
+make the expanded foundation operational by connecting the maintained universe back to ingestion and staging workflows.
+
+Tasks:
+
+- [ ] align recurring price ingestion targets to the maintained security universe
+- [ ] define how fundamentals ingestion should target the same maintained universe over time
+- [ ] preserve optional CSV exports for fixtures, inspection, and manual debugging
+- [ ] add end-to-end validation that a maintained ticker can flow through security master, prices, fundamentals, and benchmark assignment using shared loaders
+
+**Recommended Sequence**
+
+1. Finish Workstream 1 so storage and loader decisions are stable before expanding tables.
+2. Finish Workstream 2 so the eligible universe is explicit.
+3. Finish Workstream 3 so historical fundamentals have a stable contract.
+4. Finish Workstream 4 so benchmark assignment and custom baskets are modeled cleanly.
+5. Finish Workstream 5 to operationalize the expanded foundation.
+
+**Checkpoint Milestones**
+
+- `Sprint 4A`: DuckDB warehouse and shared loader path work for the current normalized tables
+- `Sprint 4B`: expanded `security_master` and universe-driven price coverage work
+- `Sprint 4C`: period-aware `normalized_fundamentals` and benchmark mapping tables work
+- `Sprint 4D`: the full expanded foundation passes end-to-end validation for a maintained universe subset
 
 **Acceptance Criteria**
 
-- a holdings file can be validated and ingested
-- current portfolio metrics can be generated from shared staging datasets
-- candidate ticker fit uses explicit, inspectable rules rather than ad hoc notebook logic
-- output tables are suitable for later report and UI reuse
+- DuckDB is the canonical analytical store for normalized and derived tables used by shared loaders
+- `security_master` can represent a broad research universe beyond the initial sample tickers
+- price ingestion targets are driven by the maintained universe rather than notebook-specific lists
+- `normalized_fundamentals` supports quarter-aware and annual historical snapshots
+- benchmark assignments and custom benchmark baskets are represented by explicit shared tables
+- the repo can materialize normalized analytical tables into DuckDB and load them through shared access paths
 
 **Exit Criteria**
 
-- Milestone 4 is satisfied:
-  a holdings file can be ingested and a current portfolio plus candidate ticker can be evaluated together
+- the shared data foundation can support broader company coverage, historical balance-sheet work, and benchmark assignment without relying on CSV-only joins
 
 **Notes**
 
 - Links:
+- Suggested implementation order:
+  start with storage and access abstractions, then expand the universe table, then redesign historical fundamentals, then split benchmark modeling, and only then broaden recurring coverage
 
 ## Sprint 5: Sector And Peer Research MVP
 
@@ -321,11 +419,14 @@ Add sector and peer context so company research can be interpreted relative to c
 - peer-relative return and valuation comparison outputs
 - sector snapshot tables
 - sector and peer research notebook
+- reusable benchmark mapping outputs for sectors, industries, and custom baskets
 
 **Tasks**
 
-- [ ] finalize security master enrichment for sector and industry fields
-- [ ] define sector ETF mapping logic and benchmark associations
+- [ ] expand `security_master` coverage and enrichment so sector and industry fields are available for a broad eligible universe
+- [ ] define standard sector and industry benchmark mapping logic and benchmark associations
+- [ ] create benchmark mapping outputs for `primary_benchmark`, `sector_benchmark`, `industry_benchmark`, `style_benchmark`, and optional `custom_benchmark`
+- [ ] create custom benchmark basket membership outputs that can combine ETFs, indexes, or stocks
 - [ ] define peer group rules for company comparison
 - [ ] implement peer-relative return comparison outputs
 - [ ] implement peer-relative valuation comparison outputs
@@ -336,6 +437,7 @@ Add sector and peer context so company research can be interpreted relative to c
 **Acceptance Criteria**
 
 - sector context can be attached to a researched company without manual notebook edits
+- benchmark assignments are generated from shared data products rather than notebook rules
 - peer group definitions are explicit and reusable
 - outputs support both company research and future app/report views
 - sector and peer comparisons are generated from shared data products
@@ -373,6 +475,7 @@ Turn research outputs into repeatable deliverables with consistent formatting an
 - [ ] create report templates in `reports/templates/`
 - [ ] implement export flow for Markdown or HTML reports
 - [ ] standardize scorecard presentation and labeling
+- [ ] update report loaders to prefer DuckDB-backed shared datasets and marts where available
 - [ ] generate at least one sample report for company research and one for portfolio fit
 - [ ] add smoke tests for report generation paths where practical
 
@@ -391,7 +494,51 @@ Turn research outputs into repeatable deliverables with consistent formatting an
 
 - Links:
 
-## Sprint 7: App Layer MVP
+## Sprint 7: Portfolio Fit MVP
+
+**Status:** Not Started
+
+**Goal**
+
+Use the now-mature shared data foundation and reporting layer to analyze a current portfolio and evaluate a new candidate security.
+
+**Planned Outputs**
+
+- holdings schema and import workflow
+- portfolio metrics and exposure outputs
+- candidate fit analysis
+- portfolio-fit notebook
+- watchlist or decision-support table
+
+**Tasks**
+
+- [ ] finalize holdings schema implementation in code
+- [ ] create holdings import workflow for file-based inputs
+- [ ] build allocation and concentration metrics
+- [ ] build exposure metrics by sector, industry, and position weight where data allows
+- [ ] implement portfolio versus benchmark comparison
+- [ ] implement candidate ticker fit logic against current holdings
+- [ ] define watchlist output structure and scoring fields
+- [ ] create notebook in `notebooks/04_portfolio_fit/`
+- [ ] add tests for holdings parsing and portfolio metric calculations
+
+**Acceptance Criteria**
+
+- a holdings file can be validated and ingested
+- current portfolio metrics can be generated from shared staging datasets and standardized outputs
+- candidate ticker fit uses explicit, inspectable rules rather than ad hoc notebook logic
+- output tables are suitable for later report and UI reuse
+
+**Exit Criteria**
+
+- Milestone 7 is satisfied:
+  a holdings file can be ingested and a current portfolio plus candidate ticker can be evaluated together
+
+**Notes**
+
+- Links:
+
+## Sprint 8: App Layer MVP
 
 **Status:** Not Started
 
@@ -425,14 +572,14 @@ Expose the core research flows in a simple local Streamlit app backed by the sha
 
 **Exit Criteria**
 
-- Milestone 5 is satisfied:
+- Milestone 8 is satisfied:
   local dashboard exposes company, sector, and portfolio workflows using shared modules
 
 **Notes**
 
 - Links:
 
-## Sprint 8: LLM Summaries And Decision Support
+## Sprint 9: LLM Summaries And Decision Support
 
 **Status:** Not Started
 
