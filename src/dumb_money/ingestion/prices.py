@@ -26,6 +26,17 @@ PRICE_COLUMNS = [
 ]
 
 
+def _flatten_price_column_name(column: object) -> str:
+    if isinstance(column, tuple):
+        parts = [str(part).strip() for part in column if str(part).strip()]
+        if not parts:
+            return ""
+        if parts[0].lower() == "date":
+            return "Date"
+        return parts[0]
+    return str(column)
+
+
 def normalize_tickers(tickers: Iterable[str]) -> list[str]:
     """Deduplicate and normalize ticker input while preserving order."""
 
@@ -59,7 +70,7 @@ def normalize_price_history_frame(
         return pd.DataFrame(columns=PRICE_COLUMNS)
 
     normalized = frame.copy()
-    normalized.columns = [str(column) for column in normalized.columns]
+    normalized.columns = [_flatten_price_column_name(column) for column in normalized.columns]
 
     if "symbol" in normalized.columns and "ticker" not in normalized.columns:
         normalized["ticker"] = normalized["symbol"]

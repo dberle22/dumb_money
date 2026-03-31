@@ -34,6 +34,7 @@ dist/
 reports/generated/
 
 # Data artifacts
+data/raw/
 data/staging/
 data/marts/
 
