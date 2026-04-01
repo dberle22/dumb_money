@@ -5,6 +5,7 @@ import pytest
 from dumb_money.ingestion.fundamentals import (
     collect_fundamentals_payload,
     flatten_dict,
+    normalize_historical_fundamentals_payload,
     normalize_fundamentals_payload,
 )
 from dumb_money.models import DataSource
@@ -91,6 +92,60 @@ def test_normalize_fundamentals_payload_normalizes_yfinance_dividend_yield_perce
     )
 
     assert snapshot.dividend_yield == pytest.approx(0.0042)
+
+
+def test_normalize_historical_fundamentals_payload_maps_mixed_period_history() -> None:
+    raw_payload = {
+        "price": {"currency": "usd", "longName": "Apple Inc.", "marketCap": 3000000000},
+        "summary_detail": {"trailingPE": 30.5, "forwardPE": 28.1, "dividendYield": 0.5},
+        "financial_data": {"financialCurrency": "usd", "totalRevenue": 1100000},
+        "asset_profile": {"sector": "Technology", "industry": "Consumer Electronics"},
+        "historical_fundamentals": [
+            {
+                "period_end_date": "2024-03-30",
+                "report_date": "2024-05-02",
+                "period_type": "quarterly",
+                "revenue": 900000,
+                "gross_profit": 380000,
+                "free_cash_flow": 120000,
+                "total_cash": 60000,
+            },
+            {
+                "period_end_date": "2023-09-30",
+                "report_date": "2023-11-02",
+                "period_type": "annual",
+                "revenue": 1500000,
+                "gross_profit": 620000,
+                "free_cash_flow": 210000,
+                "total_cash": 55000,
+            },
+            {
+                "period_end_date": "2024-03-30",
+                "period_type": "ttm",
+                "revenue": 1100000,
+                "revenue_ttm": 1100000,
+                "gross_profit": 470000,
+                "free_cash_flow": 140000,
+                "total_cash": 60000,
+            },
+        ],
+    }
+
+    snapshots = normalize_historical_fundamentals_payload(
+        "aapl",
+        raw_payload,
+        as_of_date=date(2024, 6, 30),
+    )
+
+    assert len(snapshots) == 3
+    period_types = {snapshot.period_type for snapshot in snapshots}
+    assert period_types == {"quarterly", "annual", "ttm"}
+    quarterly = next(snapshot for snapshot in snapshots if snapshot.period_type == "quarterly")
+    ttm = next(snapshot for snapshot in snapshots if snapshot.period_type == "ttm")
+    assert quarterly.fiscal_period == "Q1"
+    assert quarterly.revenue == 900000
+    assert ttm.revenue_ttm == 1100000
+    assert ttm.long_name == "Apple Inc."
 
 
 def test_collect_fundamentals_payload_falls_back_to_yfinance(monkeypatch) -> None:

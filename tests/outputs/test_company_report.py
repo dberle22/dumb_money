@@ -47,7 +47,7 @@ def test_company_report_tables_and_charts_build_from_aapl_packet() -> None:
     assert "Interpretation" in balance_sheet.columns
     assert "Interpretation" in valuation.columns
     assert "Metric" in metrics.columns
-    assert "quality-led profile" in summary_text.lower()
+    assert "screens as" in summary_text.lower()
     assert packet.ticker in final_text
 
     for figure in [

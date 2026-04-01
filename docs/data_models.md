@@ -69,12 +69,21 @@ Recommended next-step fields:
 - `first_seen_at`
 - `last_updated_at`
 - `notes`
+- `is_eligible_research_universe`
+- `cik`
 
 Recommended source strategy:
 
 - primary coverage source for broad symbol lists and listing metadata
 - provider-enriched metadata source for sector, industry, country, and company descriptors
 - manual override layer for aliases, benchmark exceptions, ADR handling, and classification cleanup
+
+Near-term Sprint 4B implementation pattern:
+
+- ingest Nasdaq Trader listed-security files into a normalized `listed_security_seed`
+- treat `listed_security_seed` as the maintained base listed universe rather than deriving the universe only from fundamentals coverage
+- use `security_master_overrides` for field-level manual corrections and inclusion or exclusion decisions
+- build final `security_master` by merging listed-universe seed data, available fundamentals enrichment, benchmark flags, and manual overrides
 
 Purpose of the expanded `security_master`:
 
@@ -286,6 +295,46 @@ Suggested stored columns for the Phase 2 staging outputs:
 - built from a broader universe source plus provider-enriched metadata and benchmark definitions
 - intended to become the central eligible-universe table rather than a lightweight temporary join table
 
+### listed_security_seed
+
+Recommended columns:
+
+- `ticker`
+- `name`
+- `exchange`
+- `listing_market`
+- `asset_type_raw`
+- `is_etf`
+- `is_test_issue`
+- `is_active`
+- `round_lot_size`
+- `is_eligible_research_universe`
+- `eligibility_reason`
+- `source`
+- `source_file`
+- `as_of_date`
+
+Purpose:
+
+- preserve the normalized broad listed-security universe seed
+- separate exchange-directory source logic from the final canonical `security_master`
+- support research-universe eligibility rules before provider enrichment is added
+
+### security_master_overrides
+
+Recommended columns:
+
+- `ticker`
+- `field_name`
+- `override_value`
+- `reason`
+- `updated_at`
+
+Purpose:
+
+- support field-level correction of asset type, exchange, benchmark flags, and research-universe eligibility
+- preserve a simple manual override path without embedding exceptions in transform code
+
 ### security_master Follow-On Role
 
 The current `security_master` already provides enough sector and industry metadata to support early company report assembly. Near-term reporting work suggests extending its practical role to support:
@@ -308,6 +357,48 @@ Canonical MVP columns:
 - `description`: free-text notes
 - `member_order`: explicit display or processing order inside the set
 - `is_default`: marks default packaged sets versus ad hoc sets
+
+### benchmark_memberships
+
+Recommended columns:
+
+- `benchmark_id`
+- `benchmark_ticker`
+- `member_ticker`
+- `member_name`
+- `member_weight`
+- `member_sector`
+- `asset_class`
+- `exchange`
+- `currency`
+- `as_of_date`
+- `source`
+- `source_file`
+
+Purpose:
+
+- capture current-snapshot constituent membership for benchmark, sector, and industry ETFs
+- keep benchmark membership separate from benchmark definitions and company assignment logic
+- support joins back to `security_master` for coverage, benchmark tagging, and future peer context
+
+### benchmark_membership_coverage
+
+Recommended columns:
+
+- benchmark metadata:
+  `benchmark_id`, `benchmark_ticker`, `benchmark_name`, `benchmark_category`, `benchmark_scope`
+- mapping metadata:
+  `mapped_sector`, `mapped_industry`
+- constituent fields:
+  `member_ticker`, `member_name`, `member_weight`, `member_sector`, `member_exchange`
+- security master join fields:
+  `is_in_security_master`, `security_id`, `security_name`, `security_asset_type`, `security_exchange`, `is_eligible_research_universe`
+
+Purpose:
+
+- provide a join-ready benchmark constituent view against the maintained `security_master`
+- show which benchmark members already exist in the repo universe and which do not
+- support benchmark-driven ingestion prioritization and coverage audits
 
 ### benchmark_mapping
 
@@ -359,6 +450,8 @@ Recommended near-term canonical DuckDB tables:
 - `normalized_prices`
 - `normalized_fundamentals`
 - `security_master`
+- `listed_security_seed`
+- `security_master_overrides`
 - `benchmark_definitions`
 - `benchmark_sets`
 - `benchmark_mappings`
@@ -370,6 +463,12 @@ Recommended implementation conventions:
 - transforms should be able to materialize outputs both to DuckDB and to optional CSV exports
 - tests can continue to use small CSV fixtures while validating DuckDB write and read paths
 - notebook and analytics code should prefer shared loaders that can read from DuckDB first, with CSV fallback only where needed
+
+Sprint 4A canonical-first implementation scope:
+
+- treat `normalized_prices`, `normalized_fundamentals`, `security_master`, and `benchmark_sets` as the first warehouse-backed canonical tables
+- keep raw provider payloads, raw benchmark definitions, and optional CSV materializations on disk for debugging, fixtures, and auditability
+- defer `benchmark_definitions`, `benchmark_mappings`, and `benchmark_memberships` warehouse promotion until the benchmark model split workstream
 
 ## Company Research and Reporting Follow-On Outputs
 

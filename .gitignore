@@ -37,6 +37,8 @@ reports/generated/
 data/raw/
 data/staging/
 data/marts/
+data/warehouse/dumb_money.duckdb
+data/reference/security_master_overrides.csv
 
 # Imported legacy repo content
 legacy/

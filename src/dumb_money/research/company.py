@@ -22,6 +22,7 @@ from dumb_money.analytics.scorecard import (
     build_company_scorecard,
 )
 from dumb_money.config import AppSettings, get_settings
+from dumb_money.storage import read_canonical_table
 from dumb_money.transforms.prices import normalize_prices_frame
 
 
@@ -51,17 +52,17 @@ def _read_csv(path: Path) -> pd.DataFrame:
 
 def load_staged_prices(*, settings: AppSettings | None = None) -> pd.DataFrame:
     settings = settings or get_settings()
-    return _read_csv(settings.normalized_prices_dir / "normalized_prices.csv")
+    return read_canonical_table("normalized_prices", settings=settings)
 
 
 def load_staged_fundamentals(*, settings: AppSettings | None = None) -> pd.DataFrame:
     settings = settings or get_settings()
-    return _read_csv(settings.normalized_fundamentals_dir / "normalized_fundamentals.csv")
+    return read_canonical_table("normalized_fundamentals", settings=settings)
 
 
 def load_benchmark_set(*, settings: AppSettings | None = None, set_id: str | None = None) -> pd.DataFrame:
     settings = settings or get_settings()
-    benchmark_sets = _read_csv(settings.benchmark_sets_dir / "benchmark_sets.csv")
+    benchmark_sets = read_canonical_table("benchmark_sets", settings=settings)
     if benchmark_sets.empty:
         return benchmark_sets
 
@@ -96,7 +97,7 @@ def load_benchmark_prices(*, settings: AppSettings | None = None) -> pd.DataFram
 
 def load_security_master(*, settings: AppSettings | None = None) -> pd.DataFrame:
     settings = settings or get_settings()
-    return _read_csv(settings.security_master_dir / "security_master.csv")
+    return read_canonical_table("security_master", settings=settings)
 
 
 def build_company_research_packet(

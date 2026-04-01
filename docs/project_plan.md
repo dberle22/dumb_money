@@ -54,7 +54,7 @@ Assessment date: `2026-03-30`
 | 1 | Shared ingestion foundation | Phase 1 | Done | Reusable config, schemas, and ingestion entry points |
 | 2 | Normalized staging layer | Phase 2 | Done | Canonical datasets for prices, fundamentals, security master, and benchmarks |
 | 3 | Company research MVP | Phase 3 | In Progress | First end-to-end single-company research packet |
-| 4 | Data foundation expansion | Phase 3 foundation | Not Started | Scalable shared datasets, benchmark mappings, and DuckDB storage |
+| 4 | Data foundation expansion | Phase 3 foundation | In Progress | Scalable shared datasets, benchmark mappings, and DuckDB storage |
 | 5 | Sector and peer research MVP | Phase 4 | Not Started | Sector context and peer-relative research outputs |
 | 6 | Reporting standardization | Phase 6 | Not Started | Repeatable report exports, scorecards, and chart helpers |
 | 7 | Portfolio fit MVP | Phase 5 | Not Started | Holdings import and candidate fit analysis on shared data |
@@ -290,7 +290,7 @@ Priority follow-on items identified during the first company research workflow:
 
 ## Sprint 4: Data Foundation Expansion
 
-**Status:** Not Started
+**Status:** In Progress
 
 **Goal**
 
@@ -314,11 +314,11 @@ make DuckDB the canonical analytical store before the table surface area expands
 
 Tasks:
 
-- [ ] define the DuckDB warehouse location, naming convention, and config settings
-- [ ] define canonical table names for normalized and derived datasets
-- [ ] implement shared read and write helpers that prefer DuckDB and allow optional CSV export
-- [ ] document which outputs remain raw-file artifacts versus which become warehouse-backed analytical tables
-- [ ] add tests covering DuckDB write, read, overwrite, and schema checks for a small fixture dataset
+- [x] define the DuckDB warehouse location, naming convention, and config settings
+- [x] define canonical table names for normalized and derived datasets
+- [x] implement shared read and write helpers that prefer DuckDB and allow optional CSV export
+- [x] document which outputs remain raw-file artifacts versus which become warehouse-backed analytical tables
+- [x] add tests covering DuckDB write, read, overwrite, and schema checks for a small fixture dataset
 
 ### Workstream 2: Security Master Expansion
 
@@ -327,11 +327,11 @@ turn `security_master` into the maintained eligible universe table for downstrea
 
 Tasks:
 
-- [ ] define the expanded `security_master` schema with lineage, coverage, and active-status fields
-- [ ] choose and document the source strategy for broad universe coverage plus metadata enrichment and manual overrides
-- [ ] implement `security_master` expansion workflow for a larger maintained universe
-- [ ] define the manual override pattern for aliases, classification cleanup, and benchmark exceptions
-- [ ] add validation checks for duplicate tickers, missing classifications, and inactive or unsupported listings
+- [x] define the expanded `security_master` schema with lineage, coverage, and active-status fields
+- [x] choose and document the source strategy for broad universe coverage plus metadata enrichment and manual overrides
+- [x] implement `security_master` expansion workflow for a larger maintained universe
+- [x] define the manual override pattern for aliases, classification cleanup, and benchmark exceptions
+- [x] add validation checks for duplicate tickers, missing classifications, and inactive or unsupported listings
 
 ### Workstream 3: Historical Fundamentals Model
 
@@ -340,11 +340,11 @@ upgrade `normalized_fundamentals` into a period-aware historical table that supp
 
 Tasks:
 
-- [ ] redesign `normalized_fundamentals` to include `period_end_date`, `report_date`, `fiscal_year`, `fiscal_quarter`, `fiscal_period`, and `period_type`
-- [ ] support both quarterly and annual fundamentals rows in staging
-- [ ] add any balance-sheet fields needed for historical balance sheet and liquidity analysis when providers support them reliably
-- [ ] define deduplication rules for one row per ticker-period snapshot
-- [ ] add tests covering mixed quarterly and annual fundamentals inputs and expected normalized outputs
+- [x] redesign `normalized_fundamentals` to include `period_end_date`, `report_date`, `fiscal_year`, `fiscal_quarter`, `fiscal_period`, and `period_type`
+- [x] support both quarterly and annual fundamentals rows in staging
+- [x] add any balance-sheet fields needed for historical balance sheet and liquidity analysis when providers support them reliably
+- [x] define deduplication rules for one row per ticker-period snapshot
+- [x] add tests covering mixed quarterly and annual fundamentals inputs and expected normalized outputs
 
 ### Workstream 4: Benchmark Data Model Split
 
@@ -353,10 +353,10 @@ separate benchmark definitions, default mappings, reusable sets, and custom bask
 
 Tasks:
 
-- [ ] split benchmark data into reusable definitions, mappings, sets, and custom basket memberships
+- [x] split benchmark data into reusable definitions, mappings, sets, and current-snapshot benchmark memberships
 - [ ] define default assignment logic for `primary_benchmark`, `sector_benchmark`, `industry_benchmark`, `style_benchmark`, and optional `custom_benchmark`
 - [ ] define a benchmark basket membership contract that supports ETFs, indexes, and stocks in one table
-- [ ] add tests covering benchmark mapping resolution and custom basket membership integrity
+- [x] add tests covering benchmark mapping resolution and benchmark membership integrity
 
 ### Workstream 5: Universe-Aligned Ingestion And Validation
 
@@ -365,10 +365,10 @@ make the expanded foundation operational by connecting the maintained universe b
 
 Tasks:
 
-- [ ] align recurring price ingestion targets to the maintained security universe
-- [ ] define how fundamentals ingestion should target the same maintained universe over time
-- [ ] preserve optional CSV exports for fixtures, inspection, and manual debugging
-- [ ] add end-to-end validation that a maintained ticker can flow through security master, prices, fundamentals, and benchmark assignment using shared loaders
+- [x] align recurring price ingestion targets to the maintained security universe
+- [x] define how fundamentals ingestion should target the same maintained universe over time
+- [x] preserve optional CSV exports for fixtures, inspection, and manual debugging
+- [x] add end-to-end validation that a maintained ticker can flow through security master, prices, fundamentals, and benchmark assignment using shared loaders
 
 **Recommended Sequence**
 
@@ -403,6 +403,18 @@ Tasks:
 - Links:
 - Suggested implementation order:
   start with storage and access abstractions, then expand the universe table, then redesign historical fundamentals, then split benchmark modeling, and only then broaden recurring coverage
+- Sprint 4B implementation notes:
+  the repo now stages `listed_security_seed` from listed-security directory inputs, applies `security_master_overrides`, expands `security_master` to include lineage and eligibility fields, and validates duplicate tickers and unsupported classifications before materializing the canonical table
+- Sprint 4 benchmark membership notes:
+  current-snapshot benchmark definitions now refresh from `data/raw/benchmark_holdings/etf_benchmark_mapping.csv`, benchmark constituent memberships materialize from the mapped holdings files, and a join-ready benchmark membership coverage table shows which constituents already exist in `security_master`
+- Sprint 4 historical fundamentals notes:
+  `normalized_fundamentals` is now a period-aware historical table in DuckDB with quarterly, annual, and `TTM` rows, provider payload lineage, deduplicated ticker-period staging rules, and fixture-backed transform coverage for mixed-period inputs
+- Sprint 4 maintained-universe ingestion notes:
+  ticker selection is now a shared concern under `src/dumb_money/universe.py`; ingestion can target either an explicit static ticker list or a DuckDB SQL selector, and benchmark-derived universes such as `DIA` are resolved through SQL against `benchmark_memberships` rather than notebook or ad hoc Python filters
+- Sprint 4 maintained-universe validation notes:
+  the repo has now proven the expanded foundation on the 30 real `DIA` constituents: about 5 years of daily prices and historical fundamentals stage successfully into DuckDB, and direct joins across `benchmark_memberships -> security_master -> normalized_prices -> normalized_fundamentals` validate the shared-table path end to end
+- Remaining Sprint 4 scope:
+  broaden recurring coverage from the validated `DIA` subset to additional maintained universes, continue provider-scale validation, and finish benchmark assignment/custom basket modeling before declaring Sprint 4 fully complete
 
 ## Sprint 5: Sector And Peer Research MVP
 

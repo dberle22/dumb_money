@@ -46,12 +46,18 @@ class PriceBar(BaseModel):
 
 
 class FundamentalSnapshot(BaseModel):
-    """Normalized point-in-time fundamentals used by research modules."""
+    """Normalized period-aware fundamentals used by research modules."""
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
     ticker: str = Field(min_length=1)
     as_of_date: date
+    period_end_date: date | None = None
+    report_date: date | None = None
+    fiscal_year: int | None = None
+    fiscal_quarter: int | None = Field(default=None, ge=1, le=4)
+    fiscal_period: str | None = None
+    period_type: str | None = None
     source: DataSource = DataSource.YFINANCE
     currency: str = "USD"
     long_name: str | None = None
@@ -60,6 +66,7 @@ class FundamentalSnapshot(BaseModel):
     website: str | None = None
     market_cap: float | None = None
     enterprise_value: float | None = None
+    revenue: float | None = None
     revenue_ttm: float | None = None
     gross_profit: float | None = None
     operating_income: float | None = None
@@ -68,6 +75,8 @@ class FundamentalSnapshot(BaseModel):
     free_cash_flow: float | None = None
     total_debt: float | None = None
     total_cash: float | None = None
+    current_assets: float | None = None
+    current_liabilities: float | None = None
     shares_outstanding: float | None = None
     eps_trailing: float | None = None
     eps_forward: float | None = None
@@ -90,3 +99,16 @@ class FundamentalSnapshot(BaseModel):
     @classmethod
     def uppercase_identifiers(cls, value: str) -> str:
         return value.upper()
+
+    @field_validator("fiscal_period")
+    @classmethod
+    def normalize_fiscal_period(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized.upper() if normalized.lower() in {"q1", "q2", "q3", "q4", "fy", "ttm"} else normalized
+
+    @field_validator("period_type")
+    @classmethod
+    def normalize_period_type(cls, value: str | None) -> str | None:
+        return value.strip().lower() if value is not None else None

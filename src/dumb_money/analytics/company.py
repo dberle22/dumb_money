@@ -273,7 +273,24 @@ def build_fundamentals_summary(fundamentals: pd.DataFrame, ticker: str) -> dict[
         return {"ticker": ticker.strip().upper()}
 
     rows["as_of_date"] = pd.to_datetime(rows["as_of_date"])
-    latest = rows.sort_values("as_of_date").iloc[-1]
+    if "period_end_date" in rows.columns:
+        rows["period_end_date"] = pd.to_datetime(rows["period_end_date"], errors="coerce")
+    else:
+        rows["period_end_date"] = pd.NaT
+    if "period_type" not in rows.columns:
+        rows["period_type"] = None
+    latest = rows.sort_values(
+        by=["as_of_date", "period_end_date", "period_type"],
+        key=lambda series: series.map(
+            lambda value: 2
+            if value == "ttm"
+            else 1
+            if value == "annual"
+            else 0
+        )
+        if series.name == "period_type"
+        else series,
+    ).iloc[-1]
 
     total_cash = latest.get("total_cash")
     total_debt = latest.get("total_debt")

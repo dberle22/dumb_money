@@ -20,19 +20,29 @@ class AssetType(StrEnum):
 
 
 class Security(BaseModel):
-    """Minimal security master record for research workflows."""
+    """Shared security master record for research workflows and universe management."""
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
+    security_id: str | None = None
     ticker: str = Field(min_length=1)
     name: str | None = None
     asset_type: AssetType = AssetType.COMMON_STOCK
     exchange: str | None = None
+    primary_listing: str | None = None
     currency: str = "USD"
     sector: str | None = None
     industry: str | None = None
     country: str | None = None
+    cik: str | None = None
     is_benchmark: bool = False
+    is_active: bool = True
+    is_eligible_research_universe: bool = False
+    source: str | None = None
+    source_id: str | None = None
+    first_seen_at: date | None = None
+    last_updated_at: date | None = None
+    notes: str | None = None
 
     @field_validator("ticker", "currency")
     @classmethod

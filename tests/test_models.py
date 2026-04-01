@@ -10,6 +10,7 @@ def test_security_uppercases_ticker_and_currency() -> None:
 
     assert security.ticker == "MSFT"
     assert security.currency == "USD"
+    assert security.is_active is True
 
 
 def test_price_bar_validates_price_range() -> None:
@@ -31,10 +32,14 @@ def test_fundamental_snapshot_uppercases_identifiers() -> None:
         ticker=" aapl ",
         as_of_date=date(2024, 6, 30),
         currency="usd",
+        period_type="TTM",
+        fiscal_period="ttm",
     )
 
     assert snapshot.ticker == "AAPL"
     assert snapshot.currency == "USD"
+    assert snapshot.period_type == "ttm"
+    assert snapshot.fiscal_period == "TTM"
 
 
 def test_benchmark_and_holding_models_accept_mvp_payloads() -> None:

@@ -42,3 +42,4 @@ def test_stage_prices_writes_staging_csv(tmp_path) -> None:
 
     assert frame["ticker"].tolist() == ["AAPL", "AAPL"]
     assert (settings.normalized_prices_dir / "normalized_prices.csv").exists()
+    assert settings.warehouse_path.exists()

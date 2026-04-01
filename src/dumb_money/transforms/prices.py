@@ -9,6 +9,7 @@ import pandas as pd
 
 from dumb_money.config.settings import AppSettings, get_settings
 from dumb_money.ingestion.prices import PRICE_COLUMNS, to_price_models
+from dumb_money.storage import export_table_csv, write_canonical_table
 
 NUMERIC_PRICE_COLUMNS = ["open", "high", "low", "close", "adj_close", "volume"]
 
@@ -93,6 +94,7 @@ def stage_prices(
     input_paths: Sequence[str | Path] | None = None,
     settings: AppSettings | None = None,
     output_name: str = "normalized_prices.csv",
+    write_warehouse: bool = True,
     write_csv: bool = True,
 ) -> pd.DataFrame:
     """Build the normalized price staging dataset from raw CSV extracts."""
@@ -107,9 +109,15 @@ def stage_prices(
     frames = [pd.read_csv(path) for path in paths]
     normalized = normalize_prices_frame(pd.concat(frames, ignore_index=True))
 
+    if write_warehouse:
+        write_canonical_table(normalized, "normalized_prices", settings=settings)
+
     if write_csv and not normalized.empty:
-        output_path = settings.normalized_prices_dir / output_name
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        normalized.to_csv(output_path, index=False)
+        if output_name == "normalized_prices.csv":
+            export_table_csv(normalized, "normalized_prices", settings=settings)
+        else:
+            output_path = settings.normalized_prices_dir / output_name
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            normalized.to_csv(output_path, index=False)
 
     return normalized
