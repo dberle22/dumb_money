@@ -9,7 +9,7 @@ import pandas as pd
 
 from dumb_money.config.settings import AppSettings, get_settings
 from dumb_money.ingestion.prices import PRICE_COLUMNS, to_price_models
-from dumb_money.storage import export_table_csv, write_canonical_table
+from dumb_money.storage import export_table_csv, upsert_canonical_table, write_canonical_table
 
 NUMERIC_PRICE_COLUMNS = ["open", "high", "low", "close", "adj_close", "volume"]
 
@@ -22,11 +22,15 @@ def _resolve_price_input_paths(
     if input_paths:
         return [Path(path) for path in input_paths]
 
-    combined_paths = sorted(settings.raw_prices_dir.glob("combined_prices_*.csv"))
-    if combined_paths:
-        return combined_paths
+    individual_paths = sorted(
+        path
+        for path in settings.raw_prices_dir.glob("*.csv")
+        if not path.name.startswith("combined_prices_")
+    )
+    if individual_paths:
+        return individual_paths
 
-    return sorted(settings.raw_prices_dir.glob("*.csv"))
+    return sorted(settings.raw_prices_dir.glob("combined_prices_*.csv"))
 
 
 def normalize_prices_frame(frame: pd.DataFrame) -> pd.DataFrame:
@@ -96,6 +100,7 @@ def stage_prices(
     output_name: str = "normalized_prices.csv",
     write_warehouse: bool = True,
     write_csv: bool = True,
+    incremental: bool = True,
 ) -> pd.DataFrame:
     """Build the normalized price staging dataset from raw CSV extracts."""
 
@@ -109,15 +114,20 @@ def stage_prices(
     frames = [pd.read_csv(path) for path in paths]
     normalized = normalize_prices_frame(pd.concat(frames, ignore_index=True))
 
+    materialized = normalized
     if write_warehouse:
-        write_canonical_table(normalized, "normalized_prices", settings=settings)
+        materialized = (
+            upsert_canonical_table(normalized, "normalized_prices", settings=settings)
+            if incremental
+            else write_canonical_table(normalized, "normalized_prices", settings=settings)
+        )
 
-    if write_csv and not normalized.empty:
+    if write_csv and not materialized.empty:
         if output_name == "normalized_prices.csv":
-            export_table_csv(normalized, "normalized_prices", settings=settings)
+            export_table_csv(materialized, "normalized_prices", settings=settings)
         else:
             output_path = settings.normalized_prices_dir / output_name
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            normalized.to_csv(output_path, index=False)
+            materialized.to_csv(output_path, index=False)
 
-    return normalized
+    return materialized

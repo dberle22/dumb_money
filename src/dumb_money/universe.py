@@ -9,18 +9,35 @@ from dumb_money.ingestion.prices import normalize_tickers
 from dumb_money.storage import query_canonical_data
 
 
-def build_benchmark_member_ticker_sql(benchmark_ticker: str) -> str:
+def build_benchmark_member_ticker_sql(
+    benchmark_ticker: str,
+    *,
+    exclude_fully_ingested: bool = False,
+) -> str:
     """Return SQL for real security tickers from benchmark membership data."""
 
     normalized = benchmark_ticker.strip().upper().replace("'", "''")
+    join_clause = ""
+    filter_clause = ""
+    if exclude_fully_ingested:
+        join_clause = """
+        left join security_ingestion_status sis
+          on sis.ticker = bm.member_ticker
+        """
+        filter_clause = """
+          and coalesce(sis.is_fully_ingested, false) = false
+        """
+
     return f"""
-        select distinct member_ticker as ticker
-        from benchmark_memberships
-        where benchmark_ticker = '{normalized}'
-          and lower(coalesce(asset_class, '')) = 'equity'
-          and regexp_matches(member_ticker, '^[A-Z][A-Z0-9.\\-]*$')
-          and member_ticker not in ('', '-', 'NAN', 'NONE', 'CASH', 'USD')
-        order by member_ticker
+        select distinct bm.member_ticker as ticker
+        from benchmark_memberships bm
+        {join_clause}
+        where bm.benchmark_ticker = '{normalized}'
+          and lower(coalesce(bm.asset_class, '')) = 'equity'
+          and regexp_matches(bm.member_ticker, '^[A-Z][A-Z0-9.\\-]*$')
+          and bm.member_ticker not in ('', '-', 'NAN', 'NONE', 'CASH', 'USD')
+          {filter_clause}
+        order by bm.member_ticker
     """
 
 

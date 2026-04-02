@@ -2,11 +2,23 @@ from datetime import date
 
 import pandas as pd
 
-from dumb_money.ingestion.prices import normalize_price_history_frame, normalize_tickers, to_price_models
+from dumb_money.ingestion.prices import (
+    normalize_price_history_frame,
+    normalize_tickers,
+    to_price_models,
+    to_yahoo_symbol,
+)
 
 
 def test_normalize_tickers_deduplicates_and_uppercases() -> None:
     assert normalize_tickers([" aapl ", "MSFT", "aapl", "", " msft "]) == ["AAPL", "MSFT"]
+
+
+def test_to_yahoo_symbol_maps_dotted_share_classes() -> None:
+    assert to_yahoo_symbol("UHAL.B") == "UHAL-B"
+    assert to_yahoo_symbol("BRK.B") == "BRK-B"
+    assert to_yahoo_symbol("BF.B") == "BF-B"
+    assert to_yahoo_symbol("AAPL") == "AAPL"
 
 
 def test_normalize_price_history_frame_maps_provider_columns() -> None:

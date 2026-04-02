@@ -10,7 +10,7 @@ import pandas as pd
 from dumb_money.config.settings import AppSettings, get_settings
 from dumb_money.ingestion.fundamentals import FUNDAMENTAL_COLUMNS
 from dumb_money.models import FundamentalSnapshot
-from dumb_money.storage import export_table_csv, write_canonical_table
+from dumb_money.storage import export_table_csv, upsert_canonical_table, write_canonical_table
 
 NUMERIC_FUNDAMENTAL_COLUMNS = [
     "market_cap",
@@ -145,6 +145,7 @@ def stage_fundamentals(
     output_name: str = "normalized_fundamentals.csv",
     write_warehouse: bool = True,
     write_csv: bool = True,
+    incremental: bool = True,
 ) -> pd.DataFrame:
     """Build the normalized fundamentals staging dataset from raw snapshot CSVs."""
 
@@ -158,15 +159,20 @@ def stage_fundamentals(
     frames = [pd.read_csv(path) for path in paths]
     normalized = normalize_fundamentals_frame(pd.concat(frames, ignore_index=True))
 
+    materialized = normalized
     if write_warehouse:
-        write_canonical_table(normalized, "normalized_fundamentals", settings=settings)
+        materialized = (
+            upsert_canonical_table(normalized, "normalized_fundamentals", settings=settings)
+            if incremental
+            else write_canonical_table(normalized, "normalized_fundamentals", settings=settings)
+        )
 
-    if write_csv and not normalized.empty:
+    if write_csv and not materialized.empty:
         if output_name == "normalized_fundamentals.csv":
-            export_table_csv(normalized, "normalized_fundamentals", settings=settings)
+            export_table_csv(materialized, "normalized_fundamentals", settings=settings)
         else:
             output_path = settings.normalized_fundamentals_dir / output_name
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            normalized.to_csv(output_path, index=False)
+            materialized.to_csv(output_path, index=False)
 
-    return normalized
+    return materialized

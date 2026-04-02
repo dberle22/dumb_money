@@ -35,6 +35,7 @@ reports/generated/
 
 # Data artifacts
 data/raw/
+data/runs/basket_ingestion/
 data/staging/
 data/marts/
 data/warehouse/dumb_money.duckdb

@@ -17,6 +17,10 @@ from dumb_money.transforms.benchmark_memberships import (
     stage_benchmark_memberships,
 )
 from dumb_money.transforms.fundamentals import normalize_fundamentals_frame, stage_fundamentals
+from dumb_money.transforms.ingestion_status import (
+    build_security_ingestion_status_frame,
+    stage_security_ingestion_status,
+)
 from dumb_money.transforms.prices import normalize_prices_frame, stage_prices
 from dumb_money.transforms.security_universe import (
     load_listed_security_seed,
@@ -36,6 +40,7 @@ __all__ = [
     "build_benchmark_memberships_frame",
     "build_benchmark_sets_frame",
     "build_security_master_frame",
+    "build_security_ingestion_status_frame",
     "filter_real_security_members",
     "get_real_benchmark_member_tickers",
     "load_listed_security_seed",
@@ -51,6 +56,7 @@ __all__ = [
     "stage_benchmark_memberships",
     "stage_benchmark_sets",
     "stage_fundamentals",
+    "stage_security_ingestion_status",
     "stage_listed_security_seed",
     "stage_prices",
     "stage_security_master_overrides",

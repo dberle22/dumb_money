@@ -56,6 +56,23 @@ def test_build_benchmark_definitions_and_memberships_from_mapping(tmp_path) -> N
             }
         ),
     )
+    _write_spdr_fixture(
+        holdings_dir / "xop_holdings.xlsx",
+        "XOP",
+        "State Street SPDR XOP ETF",
+        pd.DataFrame(
+            {
+                "Name": ["APA CORP", "XAE ENERGY        JUN26", "SSI US GOV MONEY MARKET CLASS"],
+                "Ticker": ["APA", "IXPM6", "-"],
+                "Identifier": ["03743Q108", None, None],
+                "SEDOL": ["BNNF1C1", None, None],
+                "Weight": [3.0, 0.01, 0.15],
+                "Sector": ["-", "-", "-"],
+                "Shares Held": [1, 1, 1],
+                "Local Currency": ["USD", "USD", "USD"],
+            }
+        ),
+    )
     (holdings_dir / "russell_2000_holdings.csv").write_text(
         "iShares Russell 2000 ETF\n"
         "Fund Holdings as of,\"Mar 30, 2026\"\n"
@@ -73,6 +90,7 @@ def test_build_benchmark_definitions_and_memberships_from_mapping(tmp_path) -> N
     mapping_path.write_text(
         "ticker,name,path,benchmark,sector,industry\n"
         "SPY,State Street SPDR S&P 500 ETF Trust,spy_holdings.xlsx,S&P 500,,\n"
+        "XOP,State Street SPDR XOP ETF,xop_holdings.xlsx,,,Oil & Gas Exploration\n"
         "IWM,iShares Russell 2000 ETF,russell_2000_holdings.csv,Russell 2000,,\n"
     )
 
@@ -80,9 +98,9 @@ def test_build_benchmark_definitions_and_memberships_from_mapping(tmp_path) -> N
     definitions = build_benchmark_definitions_from_mapping(mapping)
     memberships = build_benchmark_memberships_frame(mapping, base_dir=holdings_dir)
 
-    assert definitions["benchmark_id"].tolist() == ["IWM", "SPY"]
-    assert sorted(memberships["benchmark_id"].unique().tolist()) == ["IWM", "SPY"]
-    assert sorted(memberships["member_ticker"].tolist()) == ["AAPL", "BE", "FN", "MSFT"]
+    assert definitions["benchmark_id"].tolist() == ["IWM", "SPY", "XOP"]
+    assert sorted(memberships["benchmark_id"].unique().tolist()) == ["IWM", "SPY", "XOP"]
+    assert sorted(memberships["member_ticker"].tolist()) == ["AAPL", "APA", "BE", "FN", "MSFT"]
 
 
 def test_stage_benchmark_memberships_and_coverage_write_outputs(tmp_path) -> None:
@@ -253,6 +271,20 @@ def test_get_real_benchmark_member_tickers_filters_cash_and_footer_rows() -> Non
                 "member_ticker": "NAN",
                 "member_name": "Footer artifact",
                 "member_weight": 0.0,
+                "member_sector": None,
+                "asset_class": "Equity",
+                "exchange": None,
+                "currency": "USD",
+                "as_of_date": "Mar 30, 2026",
+                "source": "benchmark_holdings_snapshot",
+                "source_file": "dia_holdings.xlsx",
+            },
+            {
+                "benchmark_id": "DIA",
+                "benchmark_ticker": "DIA",
+                "member_ticker": "IXPM6",
+                "member_name": "XAE ENERGY        JUN26",
+                "member_weight": 0.1,
                 "member_sector": None,
                 "asset_class": "Equity",
                 "exchange": None,

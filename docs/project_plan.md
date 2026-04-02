@@ -116,6 +116,7 @@ Turn the repo into a clean, single-project codebase with a stable top-level stru
 **Notes**
 
 - Links:
+  `docs/universe_ingestion_checklist.md`
 - Follow-up cleanup:
   committed `.DS_Store` files still exist under `legacy/`; `.gitignore` now covers them, but they should be removed from git in a later housekeeping pass if we want a fully clean index
 - Environment setup:

@@ -56,6 +56,12 @@ def build_price_filename(label: str, start_date: date | str, end_date: date | st
     return f"{label.lower()}_{clean_start}_{clean_end}_{interval}.csv"
 
 
+def to_yahoo_symbol(ticker: str) -> str:
+    """Translate a canonical ticker into the symbol format expected by Yahoo providers."""
+
+    return str(ticker).strip().upper().replace(".", "-")
+
+
 def normalize_price_history_frame(
     frame: pd.DataFrame,
     ticker: str,
@@ -134,7 +140,8 @@ def download_prices_yahooquery(
 ) -> pd.DataFrame:
     from yahooquery import Ticker
 
-    ticker_client = Ticker(ticker)
+    provider_ticker = to_yahoo_symbol(ticker)
+    ticker_client = Ticker(provider_ticker)
     history = ticker_client.history(start=str(start_date), end=str(end_date), interval=interval)
     if history is None or history.empty:
         return pd.DataFrame(columns=PRICE_COLUMNS)
@@ -156,8 +163,9 @@ def download_prices_yfinance(
 ) -> pd.DataFrame:
     import yfinance as yf
 
+    provider_ticker = to_yahoo_symbol(ticker)
     history = yf.download(
-        ticker,
+        provider_ticker,
         start=str(start_date),
         end=str(end_date),
         interval=interval,

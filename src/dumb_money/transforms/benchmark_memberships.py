@@ -20,6 +20,8 @@ from dumb_money.transforms.benchmark_sets import normalize_benchmark_definition_
 
 BENCHMARK_MAPPING_COLUMNS = ["ticker", "name", "path", "benchmark", "sector", "industry"]
 NON_SECURITY_MEMBER_TICKERS = {"", "-", "NAN", "NONE", "CASH", "USD"}
+FUTURES_LIKE_TICKER_PATTERN = r"[A-Z]{2,5}[FGHJKMNQUVXZ]\d{1,2}"
+FUTURES_LIKE_NAME_PATTERN = r"\b(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\d{2}\b"
 
 
 def _resolve_mapping_path(
@@ -61,11 +63,18 @@ def filter_real_security_members(frame: pd.DataFrame) -> pd.DataFrame:
 
     filtered = frame.copy()
     filtered["member_ticker"] = filtered["member_ticker"].astype(str).str.strip().str.upper()
+    filtered["member_name"] = filtered["member_name"].fillna("").astype(str).str.strip()
     filtered["asset_class"] = filtered["asset_class"].fillna("").astype(str).str.strip()
     filtered = filtered.loc[filtered["asset_class"].str.lower().eq("equity")].copy()
     filtered = filtered.loc[~filtered["member_ticker"].isin(NON_SECURITY_MEMBER_TICKERS)].copy()
     filtered = filtered.loc[
         filtered["member_ticker"].str.fullmatch(r"[A-Z][A-Z0-9.\-]*", na=False)
+    ].copy()
+    filtered = filtered.loc[
+        ~filtered["member_ticker"].str.fullmatch(FUTURES_LIKE_TICKER_PATTERN, na=False)
+    ].copy()
+    filtered = filtered.loc[
+        ~filtered["member_name"].str.contains(FUTURES_LIKE_NAME_PATTERN, case=False, na=False, regex=True)
     ].copy()
     return filtered.reset_index(drop=True)
 
@@ -219,7 +228,7 @@ def build_benchmark_memberships_frame(
     if not frames:
         return pd.DataFrame(columns=BENCHMARK_MEMBERSHIP_COLUMNS)
 
-    memberships = pd.concat(frames, ignore_index=True)
+    memberships = filter_real_security_members(pd.concat(frames, ignore_index=True))
     memberships = memberships.drop_duplicates(subset=["benchmark_id", "member_ticker"], keep="first")
     return memberships.sort_values(["benchmark_id", "member_ticker"]).reset_index(drop=True)
 

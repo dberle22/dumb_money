@@ -38,3 +38,20 @@ def test_stage_fundamentals_writes_staging_csv(tmp_path) -> None:
     assert sorted(frame["period_type"].tolist()) == ["annual", "quarterly", "ttm"]
     assert (settings.normalized_fundamentals_dir / "normalized_fundamentals.csv").exists()
     assert settings.warehouse_path.exists()
+
+
+def test_stage_fundamentals_incrementally_preserves_existing_rows(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    initial_path = tmp_path / "aapl_fundamentals_history_2024-06-30.csv"
+    initial_path.write_text(Path("tests/fixtures/fundamentals/aapl_fundamentals_history_2024-06-30.csv").read_text())
+    stage_fundamentals(input_paths=[initial_path], settings=settings)
+
+    incoming_path = tmp_path / "msft_fundamentals_history_2024-06-30.csv"
+    incoming = pd.read_csv("tests/fixtures/fundamentals/aapl_fundamentals_history_2024-06-30.csv")
+    incoming["ticker"] = "MSFT"
+    incoming["long_name"] = "Microsoft Corp."
+    incoming.to_csv(incoming_path, index=False)
+
+    frame = stage_fundamentals(input_paths=[incoming_path], settings=settings)
+
+    assert sorted(frame["ticker"].unique().tolist()) == ["AAPL", "MSFT"]

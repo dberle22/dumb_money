@@ -7,7 +7,8 @@ from pandas.testing import assert_frame_equal
 from dumb_money.config import AppSettings
 import duckdb
 
-from dumb_money.storage import read_canonical_table, write_canonical_table
+from dumb_money.storage import read_canonical_table, upsert_canonical_table, write_canonical_table
+from dumb_money.transforms.ingestion_status import stage_security_ingestion_status
 
 
 def test_write_and_read_canonical_table_round_trip(tmp_path) -> None:
@@ -58,6 +59,50 @@ def test_write_canonical_table_rejects_schema_mismatch(tmp_path) -> None:
 
     with pytest.raises(ValueError):
         write_canonical_table(invalid, "normalized_prices", settings=settings)
+
+
+def test_upsert_canonical_table_merges_and_replaces_by_natural_key(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    base = pd.DataFrame(
+        {
+            "ticker": ["AAPL", "MSFT"],
+            "date": ["2024-01-02", "2024-01-02"],
+            "interval": ["1d", "1d"],
+            "source": ["yfinance", "yfinance"],
+            "currency": ["USD", "USD"],
+            "open": [100.0, 200.0],
+            "high": [101.0, 201.0],
+            "low": [99.0, 199.0],
+            "close": [100.5, 200.5],
+            "adj_close": [100.2, 200.2],
+            "volume": [1000, 2000],
+        }
+    )
+    incoming = pd.DataFrame(
+        {
+            "ticker": ["AAPL", "NVDA"],
+            "date": ["2024-01-02", "2024-01-03"],
+            "interval": ["1d", "1d"],
+            "source": ["yfinance", "yfinance"],
+            "currency": ["USD", "USD"],
+            "open": [111.0, 300.0],
+            "high": [112.0, 301.0],
+            "low": [110.0, 299.0],
+            "close": [111.5, 300.5],
+            "adj_close": [111.2, 300.2],
+            "volume": [1111, 3000],
+        }
+    )
+
+    write_canonical_table(base, "normalized_prices", settings=settings)
+    merged = upsert_canonical_table(incoming, "normalized_prices", settings=settings)
+
+    assert merged.shape == (3, len(base.columns))
+    assert merged.loc[
+        (merged["ticker"] == "AAPL") & (merged["date"].astype(str) == "2024-01-02"),
+        "close",
+    ].iloc[0] == 111.5
+    assert "NVDA" in merged["ticker"].tolist()
 
 
 def test_duckdb_tables_support_membership_price_and_fundamentals_joins(tmp_path) -> None:
@@ -191,3 +236,123 @@ def test_duckdb_tables_support_membership_price_and_fundamentals_joins(tmp_path)
     assert joined.loc[0, "security_id"] == "sec_aapl"
     assert joined.loc[0, "price_rows"] == 1
     assert joined.loc[0, "fundamentals_rows"] == 1
+
+
+def test_stage_security_ingestion_status_summarizes_coverage(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    security_master = pd.DataFrame(
+        {
+            "security_id": ["sec_aapl", "sec_msft"],
+            "ticker": ["AAPL", "MSFT"],
+            "name": ["Apple Inc.", "Microsoft Corp."],
+            "asset_type": ["common_stock", "common_stock"],
+            "exchange": ["Nasdaq", "Nasdaq"],
+            "primary_listing": ["Nasdaq", "Nasdaq"],
+            "currency": ["USD", "USD"],
+            "sector": ["Technology", "Technology"],
+            "industry": ["Consumer Electronics", "Software"],
+            "country": [None, None],
+            "cik": [None, None],
+            "is_benchmark": [False, False],
+            "is_active": [True, True],
+            "is_eligible_research_universe": [True, True],
+            "source": ["test", "test"],
+            "source_id": ["AAPL", "MSFT"],
+            "first_seen_at": [None, None],
+            "last_updated_at": [None, None],
+            "notes": [None, None],
+        }
+    )
+    prices = pd.DataFrame(
+        {
+            "ticker": ["AAPL"],
+            "date": ["2024-01-02"],
+            "interval": ["1d"],
+            "source": ["yfinance"],
+            "currency": ["USD"],
+            "open": [100.0],
+            "high": [101.0],
+            "low": [99.0],
+            "close": [100.5],
+            "adj_close": [100.2],
+            "volume": [1000],
+        }
+    )
+    fundamentals = pd.DataFrame(
+        {
+            "ticker": ["AAPL"],
+            "as_of_date": ["2024-06-30"],
+            "period_end_date": ["2024-03-30"],
+            "report_date": ["2024-05-02"],
+            "fiscal_year": [2024],
+            "fiscal_quarter": [1],
+            "fiscal_period": ["Q1"],
+            "period_type": ["quarterly"],
+            "source": ["yfinance"],
+            "currency": ["USD"],
+            "long_name": ["Apple Inc."],
+            "sector": ["Technology"],
+            "industry": ["Consumer Electronics"],
+            "website": ["https://www.apple.com"],
+            "market_cap": [1.0],
+            "enterprise_value": [1.0],
+            "revenue": [1.0],
+            "revenue_ttm": [1.0],
+            "gross_profit": [1.0],
+            "operating_income": [1.0],
+            "net_income": [1.0],
+            "ebitda": [1.0],
+            "free_cash_flow": [1.0],
+            "total_debt": [1.0],
+            "total_cash": [1.0],
+            "current_assets": [1.0],
+            "current_liabilities": [1.0],
+            "shares_outstanding": [1.0],
+            "eps_trailing": [1.0],
+            "eps_forward": [1.0],
+            "gross_margin": [1.0],
+            "operating_margin": [1.0],
+            "profit_margin": [1.0],
+            "return_on_equity": [1.0],
+            "return_on_assets": [1.0],
+            "debt_to_equity": [1.0],
+            "current_ratio": [1.0],
+            "trailing_pe": [1.0],
+            "forward_pe": [1.0],
+            "price_to_sales": [1.0],
+            "ev_to_ebitda": [1.0],
+            "dividend_yield": [1.0],
+            "raw_payload_path": ["x"],
+            "pulled_at": ["2024-06-30T12:00:00Z"],
+        }
+    )
+    memberships = pd.DataFrame(
+        {
+            "benchmark_id": ["XSD", "XSD"],
+            "benchmark_ticker": ["XSD", "XSD"],
+            "member_ticker": ["AAPL", "MSFT"],
+            "member_name": ["Apple Inc.", "Microsoft Corp."],
+            "member_weight": [3.0, 5.0],
+            "member_sector": ["Technology", "Technology"],
+            "asset_class": ["Equity", "Equity"],
+            "exchange": ["NASDAQ", "NASDAQ"],
+            "currency": ["USD", "USD"],
+            "as_of_date": ["Mar 30, 2026", "Mar 30, 2026"],
+            "source": ["benchmark_holdings_snapshot", "benchmark_holdings_snapshot"],
+            "source_file": ["xsd_holdings.xlsx", "xsd_holdings.xlsx"],
+        }
+    )
+
+    write_canonical_table(security_master, "security_master", settings=settings)
+    write_canonical_table(prices, "normalized_prices", settings=settings)
+    write_canonical_table(fundamentals, "normalized_fundamentals", settings=settings)
+    write_canonical_table(memberships, "benchmark_memberships", settings=settings)
+
+    status = stage_security_ingestion_status(settings=settings)
+
+    assert status["ticker"].tolist() == ["AAPL", "MSFT"]
+    assert bool(status.loc[status["ticker"] == "AAPL", "is_fully_ingested"].iloc[0])
+    assert not bool(status.loc[status["ticker"] == "MSFT", "has_any_ingestion"].iloc[0])
+    assert (settings.security_ingestion_status_dir / "security_ingestion_status.csv").exists()
+    loaded = read_canonical_table("security_ingestion_status", settings=settings)
+    assert set(loaded["ticker"]) == {"AAPL", "MSFT"}

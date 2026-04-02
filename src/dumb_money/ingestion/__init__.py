@@ -1,5 +1,4 @@
 """Ingestion entry points."""
-
 from dumb_money.ingestion.benchmarks import (
     ingest_benchmark_definitions,
     ingest_benchmark_prices,

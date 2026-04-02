@@ -127,6 +127,10 @@ class AppSettings:
     def benchmark_sets_dir(self) -> Path:
         return self.staging_dir / "benchmark_sets"
 
+    @property
+    def security_ingestion_status_dir(self) -> Path:
+        return self.staging_dir / "security_ingestion_status"
+
     def validate(self) -> None:
         if self.default_price_interval not in VALID_PRICE_INTERVALS:
             raise ValueError(
@@ -161,6 +165,7 @@ class AppSettings:
             self.benchmark_memberships_dir,
             self.benchmark_membership_coverage_dir,
             self.benchmark_sets_dir,
+            self.security_ingestion_status_dir,
             self.reference_dir,
         )
 

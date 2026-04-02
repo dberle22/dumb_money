@@ -51,6 +51,11 @@ def test_stage_all_command_dispatches_transform_builds(monkeypatch) -> None:
         "stage_security_master",
         lambda **kwargs: calls.append(("security_master", kwargs)),
     )
+    monkeypatch.setattr(
+        cli_main_module,
+        "stage_security_ingestion_status",
+        lambda **kwargs: calls.append(("security_ingestion_status", kwargs)),
+    )
 
     exit_code = cli_main_module.main(
         [
@@ -99,5 +104,6 @@ def test_stage_all_command_dispatches_transform_builds(monkeypatch) -> None:
                 "override_paths": ["security_master_overrides.csv"],
             },
         ),
+        ("security_ingestion_status", {}),
         ("benchmark_membership_coverage", {"mapping_path": "benchmark_mapping.csv"}),
     ]

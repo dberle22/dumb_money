@@ -28,6 +28,26 @@ BENCHMARK_SET_COLUMNS = [
     "is_default",
 ]
 
+SECURITY_INGESTION_STATUS_COLUMNS = [
+    "ticker",
+    "security_id",
+    "name",
+    "asset_type",
+    "is_eligible_research_universe",
+    "benchmark_membership_count",
+    "first_price_date",
+    "latest_price_date",
+    "price_record_count",
+    "has_price_history",
+    "first_fundamental_period_end_date",
+    "latest_fundamental_period_end_date",
+    "fundamentals_record_count",
+    "has_historical_fundamentals",
+    "has_any_ingestion",
+    "is_fully_ingested",
+    "updated_at",
+]
+
 BENCHMARK_MEMBERSHIP_COLUMNS = [
     "benchmark_id",
     "benchmark_ticker",
@@ -196,6 +216,18 @@ CANONICAL_DUCKDB_TABLES: dict[str, WarehouseTableSpec] = {
         csv_file_name="benchmark_sets.csv",
         description="Canonical reusable benchmark set membership table.",
     ),
+    "security_ingestion_status": WarehouseTableSpec(
+        table_name="security_ingestion_status",
+        columns=tuple(SECURITY_INGESTION_STATUS_COLUMNS),
+        csv_dir_attr="security_ingestion_status_dir",
+        csv_file_name="security_ingestion_status.csv",
+        description="Coverage control table showing which securities already have staged prices and fundamentals.",
+    ),
+}
+
+CANONICAL_INCREMENTAL_KEYS: dict[str, tuple[str, ...]] = {
+    "normalized_prices": ("ticker", "date", "interval", "source"),
+    "normalized_fundamentals": ("ticker", "period_end_date", "period_type", "as_of_date"),
 }
 
 
@@ -295,6 +327,46 @@ def write_canonical_table(
         connection.unregister("_canonical_frame")
 
     return validated
+
+
+def upsert_canonical_table(
+    frame: pd.DataFrame,
+    table_name: str,
+    *,
+    settings: AppSettings | None = None,
+    key_columns: Sequence[str] | None = None,
+) -> pd.DataFrame:
+    """Merge new rows into a canonical table, replacing existing rows on natural keys."""
+
+    settings = settings or get_settings()
+    spec = get_table_spec(table_name)
+    try:
+        validated = _validate_frame_columns(frame, spec)
+    except ValueError:
+        validated = _coerce_csv_fallback_frame(frame, spec)
+
+    resolved_key_columns = tuple(key_columns or CANONICAL_INCREMENTAL_KEYS.get(table_name, ()))
+    if not resolved_key_columns:
+        raise ValueError(f"no incremental key columns configured for canonical table {table_name!r}")
+
+    existing = read_canonical_table(
+        table_name,
+        settings=settings,
+        prefer_duckdb=True,
+        allow_csv_fallback=True,
+    )
+    if existing.empty:
+        return write_canonical_table(validated, table_name, settings=settings)
+
+    merged = (
+        pd.concat([existing, validated], ignore_index=True)
+        .drop_duplicates(subset=list(resolved_key_columns), keep="last")
+        .reset_index(drop=True)
+    )
+    if all(column in merged.columns for column in resolved_key_columns):
+        merged = merged.sort_values(list(resolved_key_columns)).reset_index(drop=True)
+
+    return write_canonical_table(merged, table_name, settings=settings)
 
 
 def export_table_csv(
