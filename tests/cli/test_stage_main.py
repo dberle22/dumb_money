@@ -28,6 +28,11 @@ def test_stage_all_command_dispatches_transform_builds(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         cli_main_module,
+        "stage_benchmark_mappings",
+        lambda **kwargs: calls.append(("benchmark_mappings", kwargs)),
+    )
+    monkeypatch.setattr(
+        cli_main_module,
         "stage_benchmark_membership_coverage",
         lambda **kwargs: calls.append(("benchmark_membership_coverage", kwargs)),
     )
@@ -104,6 +109,7 @@ def test_stage_all_command_dispatches_transform_builds(monkeypatch) -> None:
                 "override_paths": ["security_master_overrides.csv"],
             },
         ),
+        ("benchmark_mappings", {"mapping_path": "benchmark_mapping.csv"}),
         ("security_ingestion_status", {}),
         ("benchmark_membership_coverage", {"mapping_path": "benchmark_mapping.csv"}),
     ]

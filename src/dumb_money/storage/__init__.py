@@ -1,6 +1,7 @@
 """Shared analytical storage helpers."""
 
 from dumb_money.storage.warehouse import (
+    BENCHMARK_MAPPING_COLUMNS,
     BENCHMARK_MEMBERSHIP_COLUMNS,
     BENCHMARK_MEMBERSHIP_COVERAGE_COLUMNS,
     BENCHMARK_SET_COLUMNS,
@@ -20,6 +21,7 @@ from dumb_money.storage.warehouse import (
 )
 
 __all__ = [
+    "BENCHMARK_MAPPING_COLUMNS",
     "BENCHMARK_MEMBERSHIP_COLUMNS",
     "BENCHMARK_MEMBERSHIP_COVERAGE_COLUMNS",
     "BENCHMARK_SET_COLUMNS",

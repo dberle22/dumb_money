@@ -18,7 +18,7 @@ from dumb_money.storage import (
 )
 from dumb_money.transforms.benchmark_sets import normalize_benchmark_definition_frame
 
-BENCHMARK_MAPPING_COLUMNS = ["ticker", "name", "path", "benchmark", "sector", "industry"]
+BENCHMARK_HOLDINGS_MAPPING_COLUMNS = ["ticker", "name", "path", "benchmark", "sector", "industry"]
 NON_SECURITY_MEMBER_TICKERS = {"", "-", "NAN", "NONE", "CASH", "USD"}
 FUTURES_LIKE_TICKER_PATTERN = r"[A-Z]{2,5}[FGHJKMNQUVXZ]\d{1,2}"
 FUTURES_LIKE_NAME_PATTERN = r"\b(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\d{2}\b"
@@ -38,10 +38,10 @@ def normalize_benchmark_mapping_frame(frame: pd.DataFrame) -> pd.DataFrame:
     """Normalize the benchmark holdings mapping file."""
 
     if frame.empty:
-        return pd.DataFrame(columns=BENCHMARK_MAPPING_COLUMNS)
+        return pd.DataFrame(columns=BENCHMARK_HOLDINGS_MAPPING_COLUMNS)
 
     normalized = frame.copy()
-    missing = [column for column in BENCHMARK_MAPPING_COLUMNS if column not in normalized.columns]
+    missing = [column for column in BENCHMARK_HOLDINGS_MAPPING_COLUMNS if column not in normalized.columns]
     if missing:
         raise ValueError(f"benchmark mapping frame is missing required columns: {missing}")
 
@@ -52,7 +52,12 @@ def normalize_benchmark_mapping_frame(frame: pd.DataFrame) -> pd.DataFrame:
         normalized[column] = normalized[column].fillna("").astype(str).str.strip()
         normalized.loc[normalized[column] == "", column] = None
 
-    return normalized[BENCHMARK_MAPPING_COLUMNS].drop_duplicates(subset=["ticker"], keep="last").sort_values(["ticker"]).reset_index(drop=True)
+    return (
+        normalized[BENCHMARK_HOLDINGS_MAPPING_COLUMNS]
+        .drop_duplicates(subset=["ticker"], keep="last")
+        .sort_values(["ticker"])
+        .reset_index(drop=True)
+    )
 
 
 def filter_real_security_members(frame: pd.DataFrame) -> pd.DataFrame:

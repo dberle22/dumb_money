@@ -32,7 +32,7 @@ Supporting references:
 
 ## Current Assessment
 
-Assessment date: `2026-03-30`
+Assessment date: `2026-04-03`
 
 - Sprint 0 is complete:
   the repo has a consolidated top-level structure, one `pyproject.toml`, one `src/dumb_money/` package tree, a working `.gitignore`, legacy material isolated under `legacy/`, and a documented working local setup path on Python 3.12
@@ -40,6 +40,8 @@ Assessment date: `2026-03-30`
   benchmark ingestion now exists, the repo has a callable CLI entry point for prices, fundamentals, and benchmarks, and fixture-backed tests cover both ticker and benchmark ingestion paths
 - Sprint 2 is complete:
   normalized staging transforms, benchmark sets, a first security master build, and a staging CLI path now exist with passing transform coverage
+- Sprint 4 is complete:
+  DuckDB is now the canonical analytical store for the expanded shared datasets, maintained-universe ingestion has been validated through broad benchmark runs including `IWM`, and shared `benchmark_mappings` now move benchmark assignment logic out of notebook and scorecard defaults
 - The default dependency path now installs cleanly with `yfinance` as the required provider, while `yahooquery` has been moved to an optional `marketdata` extra
 - Local verification now works in `.venv` on Python `3.12.13`:
   `python -m pytest -q` passes and `python -m ruff check .` passes
@@ -54,7 +56,7 @@ Assessment date: `2026-03-30`
 | 1 | Shared ingestion foundation | Phase 1 | Done | Reusable config, schemas, and ingestion entry points |
 | 2 | Normalized staging layer | Phase 2 | Done | Canonical datasets for prices, fundamentals, security master, and benchmarks |
 | 3 | Company research MVP | Phase 3 | In Progress | First end-to-end single-company research packet |
-| 4 | Data foundation expansion | Phase 3 foundation | In Progress | Scalable shared datasets, benchmark mappings, and DuckDB storage |
+| 4 | Data foundation expansion | Phase 3 foundation | Done | Scalable shared datasets, benchmark mappings, and DuckDB storage |
 | 5 | Sector and peer research MVP | Phase 4 | Not Started | Sector context and peer-relative research outputs |
 | 6 | Reporting standardization | Phase 6 | Not Started | Repeatable report exports, scorecards, and chart helpers |
 | 7 | Portfolio fit MVP | Phase 5 | Not Started | Holdings import and candidate fit analysis on shared data |
@@ -225,7 +227,7 @@ Transform raw provider outputs into canonical staging datasets that downstream a
 
 ## Sprint 3: Company Research MVP
 
-**Status:** In Progress
+**Status:** Done
 
 **Goal**
 
@@ -355,8 +357,8 @@ separate benchmark definitions, default mappings, reusable sets, and custom bask
 Tasks:
 
 - [x] split benchmark data into reusable definitions, mappings, sets, and current-snapshot benchmark memberships
-- [ ] define default assignment logic for `primary_benchmark`, `sector_benchmark`, `industry_benchmark`, `style_benchmark`, and optional `custom_benchmark`
-- [ ] define a benchmark basket membership contract that supports ETFs, indexes, and stocks in one table
+- [x] define default assignment logic for `primary_benchmark`, `sector_benchmark`, `industry_benchmark`, `style_benchmark`, and optional `custom_benchmark`
+- [x] define the shared current-benchmark membership contract used for benchmark ETFs and indexes, with mixed custom composites deferred to Sprint 5
 - [x] add tests covering benchmark mapping resolution and benchmark membership integrity
 
 ### Workstream 5: Universe-Aligned Ingestion And Validation
@@ -392,7 +394,7 @@ Tasks:
 - `security_master` can represent a broad research universe beyond the initial sample tickers
 - price ingestion targets are driven by the maintained universe rather than notebook-specific lists
 - `normalized_fundamentals` supports quarter-aware and annual historical snapshots
-- benchmark assignments and custom benchmark baskets are represented by explicit shared tables
+- benchmark assignments are represented by explicit shared tables and current benchmark memberships are modeled in shared canonical datasets
 - the repo can materialize normalized analytical tables into DuckDB and load them through shared access paths
 
 **Exit Criteria**
@@ -413,9 +415,11 @@ Tasks:
 - Sprint 4 maintained-universe ingestion notes:
   ticker selection is now a shared concern under `src/dumb_money/universe.py`; ingestion can target either an explicit static ticker list or a DuckDB SQL selector, and benchmark-derived universes such as `DIA` are resolved through SQL against `benchmark_memberships` rather than notebook or ad hoc Python filters
 - Sprint 4 maintained-universe validation notes:
-  the repo has now proven the expanded foundation on the 30 real `DIA` constituents: about 5 years of daily prices and historical fundamentals stage successfully into DuckDB, and direct joins across `benchmark_memberships -> security_master -> normalized_prices -> normalized_fundamentals` validate the shared-table path end to end
-- Remaining Sprint 4 scope:
-  broaden recurring coverage from the validated `DIA` subset to additional maintained universes, continue provider-scale validation, and finish benchmark assignment/custom basket modeling before declaring Sprint 4 fully complete
+  the repo has now proven the expanded foundation on maintained benchmark universes including `DIA`, `SPY`, and a 15-batch `IWM` run. Final `IWM` validation on `2026-04-03` shows `1936` target tickers, `1925` fully ingested tickers, no `security_master` or `normalized_fundamentals` gaps, and 11 residual price misses isolated for targeted cleanup
+- Sprint 4 benchmark assignment notes:
+  `benchmark_mappings` is now a shared canonical data product built from `security_master`, `benchmark_definitions`, `benchmark_memberships`, and the benchmark holdings reference mapping. The live repo currently materializes `5523` active assignment rows into DuckDB and CSV, and company research can consume those mappings when present
+- Sprint 4 closeout:
+  mixed custom benchmark composites, peer grouping, sector snapshots, and broader research interpretation now move forward as Sprint 5 work rather than remaining Sprint 4 blockers
 
 ## Sprint 5: Sector And Peer Research MVP
 
@@ -436,9 +440,9 @@ Add sector and peer context so company research can be interpreted relative to c
 
 **Tasks**
 
-- [ ] expand `security_master` coverage and enrichment so sector and industry fields are available for a broad eligible universe
-- [ ] define standard sector and industry benchmark mapping logic and benchmark associations
-- [ ] create benchmark mapping outputs for `primary_benchmark`, `sector_benchmark`, `industry_benchmark`, `style_benchmark`, and optional `custom_benchmark`
+- [x] expand `security_master` coverage and enrichment so sector and industry fields are available for a broad eligible universe
+- [x] define standard sector and industry benchmark mapping logic and benchmark associations
+- [x] create benchmark mapping outputs for `primary_benchmark`, `sector_benchmark`, `industry_benchmark`, `style_benchmark`, and optional `custom_benchmark`
 - [ ] create custom benchmark basket membership outputs that can combine ETFs, indexes, or stocks
 - [ ] define peer group rules for company comparison
 - [ ] implement peer-relative return comparison outputs

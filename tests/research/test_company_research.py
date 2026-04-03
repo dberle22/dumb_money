@@ -59,6 +59,24 @@ def test_build_company_research_packet_from_shared_datasets(tmp_path) -> None:
         }
     )
     write_canonical_table(benchmark_sets, "benchmark_sets", settings=settings)
+    benchmark_mappings = pd.DataFrame(
+        {
+            "mapping_id": ["benchmark_mapping::AAPL"],
+            "ticker": ["AAPL"],
+            "sector": ["Technology"],
+            "industry": ["Consumer Electronics"],
+            "primary_benchmark": ["QQQ"],
+            "sector_benchmark": ["SPY"],
+            "industry_benchmark": [None],
+            "style_benchmark": [None],
+            "custom_benchmark": [None],
+            "assignment_method": ["test_fixture"],
+            "priority": [1],
+            "is_active": [True],
+            "notes": [None],
+        }
+    )
+    write_canonical_table(benchmark_mappings, "benchmark_mappings", settings=settings)
 
     security_master = pd.DataFrame(
         [
@@ -128,8 +146,8 @@ def test_build_company_research_packet_from_shared_datasets(tmp_path) -> None:
     assert packet.trailing_return_comparison["window"].tolist() == ["1m", "3m", "6m", "1y"]
     assert packet.benchmark_comparison["benchmark_ticker"].tolist() == ["SPY", "SPY", "SPY", "SPY", "QQQ", "QQQ", "QQQ", "QQQ"]
     assert "net_cash" in packet.fundamentals_summary
-    assert packet.scorecard.summary["primary_benchmark"] == "SPY"
-    assert packet.scorecard.summary["secondary_benchmark"] == "QQQ"
+    assert packet.scorecard.summary["primary_benchmark"] == "QQQ"
+    assert packet.scorecard.summary["secondary_benchmark"] == "SPY"
     assert packet.scorecard.summary["total_score"] >= 0
 
 

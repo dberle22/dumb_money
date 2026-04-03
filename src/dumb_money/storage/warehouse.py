@@ -28,6 +28,22 @@ BENCHMARK_SET_COLUMNS = [
     "is_default",
 ]
 
+BENCHMARK_MAPPING_COLUMNS = [
+    "mapping_id",
+    "ticker",
+    "sector",
+    "industry",
+    "primary_benchmark",
+    "sector_benchmark",
+    "industry_benchmark",
+    "style_benchmark",
+    "custom_benchmark",
+    "assignment_method",
+    "priority",
+    "is_active",
+    "notes",
+]
+
 SECURITY_INGESTION_STATUS_COLUMNS = [
     "ticker",
     "security_id",
@@ -215,6 +231,13 @@ CANONICAL_DUCKDB_TABLES: dict[str, WarehouseTableSpec] = {
         csv_dir_attr="benchmark_sets_dir",
         csv_file_name="benchmark_sets.csv",
         description="Canonical reusable benchmark set membership table.",
+    ),
+    "benchmark_mappings": WarehouseTableSpec(
+        table_name="benchmark_mappings",
+        columns=tuple(BENCHMARK_MAPPING_COLUMNS),
+        csv_dir_attr="benchmark_mappings_dir",
+        csv_file_name="benchmark_mappings.csv",
+        description="Canonical benchmark assignment table for shared company and sector workflows.",
     ),
     "security_ingestion_status": WarehouseTableSpec(
         table_name="security_ingestion_status",

@@ -468,7 +468,7 @@ Sprint 4A canonical-first implementation scope:
 
 - treat `normalized_prices`, `normalized_fundamentals`, `security_master`, and `benchmark_sets` as the first warehouse-backed canonical tables
 - keep raw provider payloads, raw benchmark definitions, and optional CSV materializations on disk for debugging, fixtures, and auditability
-- defer `benchmark_definitions`, `benchmark_mappings`, and `benchmark_memberships` warehouse promotion until the benchmark model split workstream
+- promote `benchmark_definitions`, `benchmark_mappings`, and `benchmark_memberships` into DuckDB-backed canonical tables as the benchmark model split workstream lands
 
 ## Company Research and Reporting Follow-On Outputs
 

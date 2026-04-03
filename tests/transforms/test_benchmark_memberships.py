@@ -16,6 +16,10 @@ from dumb_money.transforms.benchmark_memberships import (
     stage_benchmark_membership_coverage,
     stage_benchmark_memberships,
 )
+from dumb_money.transforms.benchmark_mappings import (
+    build_benchmark_mappings_frame,
+    stage_benchmark_mappings,
+)
 from dumb_money.transforms.security_master import stage_security_master
 from dumb_money.transforms.security_universe import stage_listed_security_seed, stage_security_master_overrides
 
@@ -314,3 +318,238 @@ def test_get_real_benchmark_member_tickers_filters_cash_and_footer_rows() -> Non
 
     assert filtered["member_ticker"].tolist() == ["AAPL", "MSFT"]
     assert get_real_benchmark_member_tickers(memberships, benchmark_ticker="dia") == ["AAPL", "MSFT"]
+
+
+def test_build_benchmark_mappings_frame_assigns_primary_and_sector_benchmarks() -> None:
+    security_master = pd.DataFrame(
+        [
+            {
+                "security_id": "sec_aapl",
+                "ticker": "AAPL",
+                "name": "Apple Inc.",
+                "asset_type": "common_stock",
+                "exchange": "Nasdaq",
+                "primary_listing": "Nasdaq",
+                "currency": "USD",
+                "sector": "Technology",
+                "industry": "Consumer Electronics",
+                "country": None,
+                "cik": None,
+                "is_benchmark": False,
+                "is_active": True,
+                "is_eligible_research_universe": True,
+                "source": "test",
+                "source_id": "AAPL",
+                "first_seen_at": None,
+                "last_updated_at": None,
+                "notes": None,
+            },
+            {
+                "security_id": "sec_be",
+                "ticker": "BE",
+                "name": "Bloom Energy",
+                "asset_type": "common_stock",
+                "exchange": "NYSE",
+                "primary_listing": "NYSE",
+                "currency": "USD",
+                "sector": "Industrials",
+                "industry": None,
+                "country": None,
+                "cik": None,
+                "is_benchmark": False,
+                "is_active": True,
+                "is_eligible_research_universe": True,
+                "source": "test",
+                "source_id": "BE",
+                "first_seen_at": None,
+                "last_updated_at": None,
+                "notes": None,
+            },
+        ]
+    )
+    benchmark_definitions = pd.DataFrame(
+        [
+            {
+                "benchmark_id": "SPY",
+                "ticker": "SPY",
+                "name": "SPY",
+                "category": "market",
+                "scope": "us_large_cap",
+                "currency": "USD",
+                "inception_date": None,
+                "description": "S&P 500",
+            },
+            {
+                "benchmark_id": "QQQ",
+                "ticker": "QQQ",
+                "name": "QQQ",
+                "category": "market",
+                "scope": "nasdaq_100",
+                "currency": "USD",
+                "inception_date": None,
+                "description": "Nasdaq 100",
+            },
+            {
+                "benchmark_id": "IWM",
+                "ticker": "IWM",
+                "name": "IWM",
+                "category": "market",
+                "scope": "us_small_cap",
+                "currency": "USD",
+                "inception_date": None,
+                "description": "Russell 2000",
+            },
+            {
+                "benchmark_id": "XLK",
+                "ticker": "XLK",
+                "name": "XLK",
+                "category": "sector",
+                "scope": "technology",
+                "currency": "USD",
+                "inception_date": None,
+                "description": "Technology",
+            },
+        ]
+    )
+    benchmark_memberships = pd.DataFrame(
+        [
+            {
+                "benchmark_id": "SPY",
+                "benchmark_ticker": "SPY",
+                "member_ticker": "AAPL",
+                "member_name": "Apple Inc.",
+                "member_weight": 1.0,
+                "member_sector": "Technology",
+                "asset_class": "Equity",
+                "exchange": "NASDAQ",
+                "currency": "USD",
+                "as_of_date": "Mar 30, 2026",
+                "source": "benchmark_holdings_snapshot",
+                "source_file": "spy_holdings.xlsx",
+            },
+            {
+                "benchmark_id": "QQQ",
+                "benchmark_ticker": "QQQ",
+                "member_ticker": "AAPL",
+                "member_name": "Apple Inc.",
+                "member_weight": 1.0,
+                "member_sector": "Technology",
+                "asset_class": "Equity",
+                "exchange": "NASDAQ",
+                "currency": "USD",
+                "as_of_date": "Mar 30, 2026",
+                "source": "benchmark_holdings_snapshot",
+                "source_file": "qqq_holdings.xlsx",
+            },
+            {
+                "benchmark_id": "IWM",
+                "benchmark_ticker": "IWM",
+                "member_ticker": "BE",
+                "member_name": "Bloom Energy",
+                "member_weight": 1.0,
+                "member_sector": "Industrials",
+                "asset_class": "Equity",
+                "exchange": "NYSE",
+                "currency": "USD",
+                "as_of_date": "Mar 30, 2026",
+                "source": "benchmark_holdings_snapshot",
+                "source_file": "iwm_holdings.csv",
+            },
+        ]
+    )
+    reference = pd.DataFrame(
+        [
+            {"ticker": "SPY", "name": "SPY", "path": "spy_holdings.xlsx", "benchmark": "S&P 500", "sector": None, "industry": None},
+            {"ticker": "QQQ", "name": "QQQ", "path": "qqq_holdings.xlsx", "benchmark": "Nasdaq 100", "sector": None, "industry": None},
+            {"ticker": "IWM", "name": "IWM", "path": "iwm_holdings.csv", "benchmark": "Russell 2000", "sector": None, "industry": None},
+            {"ticker": "XLK", "name": "XLK", "path": "xlk_holdings.xlsx", "benchmark": None, "sector": "Technology", "industry": None},
+        ]
+    )
+
+    mappings = build_benchmark_mappings_frame(
+        security_master,
+        benchmark_definitions,
+        benchmark_memberships,
+        reference,
+    )
+
+    aapl = mappings.loc[mappings["ticker"] == "AAPL"].iloc[0]
+    be = mappings.loc[mappings["ticker"] == "BE"].iloc[0]
+
+    assert aapl["primary_benchmark"] == "SPY"
+    assert aapl["sector_benchmark"] == "XLK"
+    assert aapl["style_benchmark"] == "QQQ"
+    assert be["primary_benchmark"] == "IWM"
+
+
+def test_stage_benchmark_mappings_writes_outputs(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    holdings_dir = settings.raw_benchmark_holdings_dir
+    holdings_dir.mkdir(parents=True)
+    mapping_path = holdings_dir / "etf_benchmark_mapping.csv"
+    fundamentals_path = tmp_path / "msft_fundamentals_history_2024-06-30.csv"
+
+    _write_spdr_fixture(
+        holdings_dir / "spy_holdings.xlsx",
+        "SPY",
+        "State Street SPDR S&P 500 ETF Trust",
+        pd.DataFrame(
+            {
+                "Name": ["Microsoft Corp"],
+                "Ticker": ["MSFT"],
+                "Identifier": ["594918104"],
+                "SEDOL": ["2588173"],
+                "Weight": [7.0],
+                "Sector": ["Technology"],
+                "Shares Held": [1],
+                "Local Currency": ["USD"],
+            }
+        ),
+    )
+    _write_spdr_fixture(
+        holdings_dir / "xlk_holdings.xlsx",
+        "XLK",
+        "Technology Select Sector SPDR Fund",
+        pd.DataFrame(
+            {
+                "Name": ["Microsoft Corp"],
+                "Ticker": ["MSFT"],
+                "Identifier": ["594918104"],
+                "SEDOL": ["2588173"],
+                "Weight": [20.0],
+                "Sector": ["Technology"],
+                "Shares Held": [1],
+                "Local Currency": ["USD"],
+            }
+        ),
+    )
+    mapping_path.write_text(
+        "ticker,name,path,benchmark,sector,industry\n"
+        "SPY,State Street SPDR S&P 500 ETF Trust,spy_holdings.xlsx,S&P 500,,\n"
+        "XLK,Technology Select Sector SPDR Fund,xlk_holdings.xlsx,,Technology,\n"
+    )
+    fundamentals = pd.read_csv("tests/fixtures/fundamentals/aapl_fundamentals_history_2024-06-30.csv")
+    fundamentals["ticker"] = "MSFT"
+    fundamentals["long_name"] = "Microsoft Corp."
+    fundamentals["sector"] = "Technology"
+    fundamentals["industry"] = "Software"
+    fundamentals.to_csv(fundamentals_path, index=False)
+
+    stage_listed_security_seed(
+        nasdaq_listed_paths=["tests/fixtures/universe/nasdaqlisted_sample.txt"],
+        other_listed_paths=["tests/fixtures/universe/otherlisted_sample.txt"],
+        settings=settings,
+        as_of_date="2026-03-31",
+    )
+    stage_security_master_overrides(settings=settings)
+    stage_security_master(settings=settings, fundamentals_paths=[fundamentals_path], write_csv=False)
+    stage_benchmark_definition_refresh(mapping_path=mapping_path, settings=settings)
+    stage_benchmark_memberships(mapping_path=mapping_path, settings=settings)
+
+    mappings = stage_benchmark_mappings(mapping_path=mapping_path, settings=settings)
+
+    assert "MSFT" in mappings["ticker"].tolist()
+    msft = mappings.loc[mappings["ticker"] == "MSFT"].iloc[0]
+    assert msft["primary_benchmark"] == "SPY"
+    assert msft["sector_benchmark"] == "XLK"
+    assert (settings.benchmark_mappings_dir / "benchmark_mappings.csv").exists()

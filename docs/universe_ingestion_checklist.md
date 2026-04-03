@@ -59,7 +59,7 @@ Run the broad-benchmark batch workflow with these commands:
 ### Phase 3: Broad Benchmarks
 
 - [x] `SPY` S&P 500
-- [ ] `IWM` Russell 2000
+- [x] `IWM` Russell 2000
 
 ### Already Validated
 
@@ -131,7 +131,21 @@ Tracking:
 - [x] batch `12`
 - [x] batch `13`
 - [x] batch `14`
-- [ ] final `basket-validate`
+- [x] final `basket-validate`
+
+Validation snapshot from `2026-04-03`:
+
+- target tickers: `1936`
+- fully ingested tickers: `1925`
+- missing from `security_master`: none
+- missing from `normalized_fundamentals`: none
+- missing from `normalized_prices`: `ADRO`, `AKE`, `CRDA`, `GEFB`, `GTXI`, `INH`, `MOGA`, `P5N994`, `PDLI`, `SBT`, `THRD`
+- period types present: `annual`, `quarterly`, `ttm`
+
+Closeout note:
+
+- treat the `IWM` broad benchmark pass as complete for Sprint 4
+- track the 11 residual price misses as targeted provider or symbol-artifact cleanup rather than reopening the full basket run
 
 ## Useful SQL
 

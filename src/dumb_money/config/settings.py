@@ -128,6 +128,10 @@ class AppSettings:
         return self.staging_dir / "benchmark_sets"
 
     @property
+    def benchmark_mappings_dir(self) -> Path:
+        return self.staging_dir / "benchmark_mappings"
+
+    @property
     def security_ingestion_status_dir(self) -> Path:
         return self.staging_dir / "security_ingestion_status"
 
@@ -165,6 +169,7 @@ class AppSettings:
             self.benchmark_memberships_dir,
             self.benchmark_membership_coverage_dir,
             self.benchmark_sets_dir,
+            self.benchmark_mappings_dir,
             self.security_ingestion_status_dir,
             self.reference_dir,
         )

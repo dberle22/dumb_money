@@ -126,6 +126,7 @@ def build_company_scorecard(
 ) -> CompanyScorecard:
     """Build the buildable V1 company scorecard from reusable analytics outputs."""
 
+    resolved_primary_benchmark = primary_benchmark or DEFAULT_PRIMARY_BENCHMARK
     available_benchmarks = set(benchmark_comparison.get("benchmark_ticker", pd.Series(dtype=str)).tolist())
     resolved_secondary = secondary_benchmark or resolve_secondary_benchmark(
         sector,
@@ -171,7 +172,7 @@ def build_company_scorecard(
             }
         )
 
-    primary_excess_return = _lookup_excess_return(benchmark_comparison, primary_benchmark)
+    primary_excess_return = _lookup_excess_return(benchmark_comparison, resolved_primary_benchmark)
     secondary_excess_return = _lookup_excess_return(benchmark_comparison, resolved_secondary)
     max_drawdown_1y = _to_float(risk_metrics.get("max_drawdown_1y"))
     price_vs_sma_200 = _to_float(trend_metrics.get("price_vs_sma_200"))
@@ -482,7 +483,7 @@ def build_company_scorecard(
         "company_name": company_name,
         "sector": sector,
         "industry": industry,
-        "primary_benchmark": primary_benchmark,
+        "primary_benchmark": resolved_primary_benchmark,
         "secondary_benchmark": resolved_secondary,
         "score_date": score_date,
         "total_score": total_score,

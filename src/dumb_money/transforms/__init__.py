@@ -16,6 +16,10 @@ from dumb_money.transforms.benchmark_memberships import (
     stage_benchmark_membership_coverage,
     stage_benchmark_memberships,
 )
+from dumb_money.transforms.benchmark_mappings import (
+    build_benchmark_mappings_frame,
+    stage_benchmark_mappings,
+)
 from dumb_money.transforms.fundamentals import normalize_fundamentals_frame, stage_fundamentals
 from dumb_money.transforms.ingestion_status import (
     build_security_ingestion_status_frame,
@@ -37,6 +41,7 @@ __all__ = [
     "BENCHMARK_SET_COLUMNS",
     "build_benchmark_definitions_from_mapping",
     "build_benchmark_membership_coverage_frame",
+    "build_benchmark_mappings_frame",
     "build_benchmark_memberships_frame",
     "build_benchmark_sets_frame",
     "build_security_master_frame",
@@ -53,6 +58,7 @@ __all__ = [
     "normalize_security_master_overrides",
     "stage_benchmark_definition_refresh",
     "stage_benchmark_membership_coverage",
+    "stage_benchmark_mappings",
     "stage_benchmark_memberships",
     "stage_benchmark_sets",
     "stage_fundamentals",

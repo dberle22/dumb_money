@@ -23,6 +23,7 @@ from dumb_money.ingestion.baskets import (
 )
 from dumb_money.transforms import (
     stage_benchmark_definition_refresh,
+    stage_benchmark_mappings,
     stage_benchmark_membership_coverage,
     stage_benchmark_memberships,
     stage_benchmark_sets,
@@ -129,6 +130,7 @@ def build_parser() -> argparse.ArgumentParser:
             "benchmark-definitions",
             "benchmark-memberships",
             "benchmark-membership-coverage",
+            "benchmark-mappings",
             "benchmark-sets",
             "security-master",
             "security-ingestion-status",
@@ -308,6 +310,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 benchmark_definition_paths=args.benchmark_definition_paths,
                 override_paths=args.override_paths,
             )
+        if args.target in {"benchmark-mappings", "all"}:
+            stage_benchmark_mappings(mapping_path=args.benchmark_mapping_path)
         if args.target in {"security-ingestion-status", "all"}:
             stage_security_ingestion_status()
         if args.target in {"benchmark-membership-coverage", "all"}:
