@@ -57,7 +57,7 @@ Assessment date: `2026-04-03`
 | 2 | Normalized staging layer | Phase 2 | Done | Canonical datasets for prices, fundamentals, security master, and benchmarks |
 | 3 | Company research MVP | Phase 3 | In Progress | First end-to-end single-company research packet |
 | 4 | Data foundation expansion | Phase 3 foundation | Done | Scalable shared datasets, benchmark mappings, and DuckDB storage |
-| 5 | Sector and peer research MVP | Phase 4 | Not Started | Sector context and peer-relative research outputs |
+| 5 | Sector and peer research MVP | Phase 4 | Done | Sector context and peer-relative research outputs |
 | 6 | Reporting standardization | Phase 6 | Not Started | Repeatable report exports, scorecards, and chart helpers |
 | 7 | Portfolio fit MVP | Phase 5 | Not Started | Holdings import and candidate fit analysis on shared data |
 | 8 | App layer MVP | Phase 7 | Not Started | Local Streamlit app powered by shared modules |
@@ -118,6 +118,55 @@ Turn the repo into a clean, single-project codebase with a stable top-level stru
 **Notes**
 
 - Links:
+- Recommended first implementation slice:
+  build the shared peer foundation first by introducing a canonical `peer_sets` data product plus one reusable peer-relative valuation output that can be attached to the existing company research packet without changing scorecard scoring yet
+- Why this slice comes first:
+  it uses the strongest completed Sprint 4 prerequisites directly (`security_master`, historical and latest `normalized_fundamentals`, DuckDB-backed loaders, and `benchmark_mappings`), creates the missing shared peer contract needed by later return and scoring work, and avoids coupling the first Sprint 5 change to notebook-only workflows or custom basket modeling
+- Suggested implementation order:
+  1. add a canonical DuckDB-backed `peer_sets` table and shared loader path
+  2. implement deterministic peer-group construction rules from `security_master`
+  3. implement one shared peer valuation comparison output using `peer_sets` plus latest fundamentals snapshots
+  4. attach that peer valuation context to the company research packet and report helpers
+  5. only after the peer contract is stable, expand into peer-relative return outputs, sector snapshots, and any scorecard percentile changes
+- Suggested module boundaries for the first slice:
+  - `src/dumb_money/storage/warehouse.py`:
+    add the canonical `peer_sets` table spec and schema contract so DuckDB remains the system of record
+  - `src/dumb_money/transforms/peer_sets.py`:
+    own canonical peer-set construction and staging into DuckDB and optional CSV export
+  - `src/dumb_money/research/company.py`:
+    add a shared loader for `peer_sets` and extend the research packet assembly to include peer context from canonical tables only
+  - `src/dumb_money/analytics/company.py`:
+    add the first peer comparison builder, scoped narrowly to a peer valuation panel and peer summary statistics rather than a full peer research mart
+  - `src/dumb_money/outputs/company_report.py`:
+    add a notebook- and report-friendly peer valuation table only after the shared analytics output exists
+- Suggested function boundaries for the first slice:
+  - in `src/dumb_money/transforms/peer_sets.py`:
+    `build_peer_sets_frame(security_master: pd.DataFrame, fundamentals: pd.DataFrame) -> pd.DataFrame`
+    `stage_peer_sets(settings: AppSettings | None = None, write_warehouse: bool = True, write_csv: bool = True) -> pd.DataFrame`
+  - in `src/dumb_money/research/company.py`:
+    `load_peer_sets(*, settings: AppSettings | None = None) -> pd.DataFrame`
+  - in `src/dumb_money/analytics/company.py`:
+    `build_peer_valuation_comparison(ticker: str, peer_sets: pd.DataFrame, fundamentals: pd.DataFrame) -> pd.DataFrame`
+    `build_peer_summary_stats(peer_valuation: pd.DataFrame) -> dict[str, Any]`
+  - in `src/dumb_money/outputs/company_report.py`:
+    `build_peer_valuation_table(packet: CompanyResearchPacket) -> pd.DataFrame`
+- Proposed default peer-group rules for the first slice:
+  - start from `security_master` and keep only active, research-eligible, non-benchmark common-stock names
+  - exclude the focal ticker from its own peer rows
+  - prefer same-industry peers first
+  - fall back to same-sector peers when industry coverage is too thin
+  - use latest fundamentals only as a lightweight eligibility or ordering aid, not as a second independent peer-definition system
+  - record `relationship_type`, `selection_method`, and `peer_order` on every row so downstream research and scorecard logic can remain deterministic
+- Scope guardrails for the first slice:
+  - do not change scorecard weights or replace absolute valuation scoring yet
+  - do not start with notebook-only peer logic
+  - do not make custom benchmark baskets a prerequisite for peer research
+  - do not build sector snapshots before peer-set rules are stable enough to reuse there
+- Focused tests to write first:
+  - transform tests for industry-first peer selection, sector fallback behavior, exclusion rules, and deterministic ordering
+  - warehouse tests for `peer_sets` DuckDB write and read round-trips and schema enforcement
+  - analytics tests for peer valuation joins, peer medians, peer counts, and missing-data handling
+  - one research integration test confirming company research can consume canonical peer context without changing current benchmark-mapping behavior
   `docs/universe_ingestion_checklist.md`
 - Follow-up cleanup:
   committed `.DS_Store` files still exist under `legacy/`; `.gitignore` now covers them, but they should be removed from git in a later housekeeping pass if we want a fully clean index
@@ -423,7 +472,7 @@ Tasks:
 
 ## Sprint 5: Sector And Peer Research MVP
 
-**Status:** Not Started
+**Status:** Done
 
 **Goal**
 
@@ -443,13 +492,13 @@ Add sector and peer context so company research can be interpreted relative to c
 - [x] expand `security_master` coverage and enrichment so sector and industry fields are available for a broad eligible universe
 - [x] define standard sector and industry benchmark mapping logic and benchmark associations
 - [x] create benchmark mapping outputs for `primary_benchmark`, `sector_benchmark`, `industry_benchmark`, `style_benchmark`, and optional `custom_benchmark`
-- [ ] create custom benchmark basket membership outputs that can combine ETFs, indexes, or stocks
-- [ ] define peer group rules for company comparison
-- [ ] implement peer-relative return comparison outputs
-- [ ] implement peer-relative valuation comparison outputs
-- [ ] build sector snapshot tables for reusable downstream consumption
-- [ ] create notebook in `notebooks/03_sector_research/`
-- [ ] add tests for peer grouping and sector mapping logic
+- [x] create custom benchmark basket membership outputs that can combine ETFs, indexes, or stocks
+- [x] define peer group rules for company comparison
+- [x] implement peer-relative return comparison outputs
+- [x] implement peer-relative valuation comparison outputs
+- [x] build sector snapshot tables for reusable downstream consumption
+- [x] create notebook in `notebooks/03_sector_research/`
+- [x] add tests for peer grouping and sector mapping logic
 
 **Acceptance Criteria**
 
@@ -467,6 +516,8 @@ Add sector and peer context so company research can be interpreted relative to c
 **Notes**
 
 - Links:
+- Sprint 5 closeout:
+  shared `peer_sets`, peer-relative return outputs, peer-relative valuation outputs, sector snapshot tables, a sector research notebook, and mixed custom benchmark basket membership support now exist as shared code paths rather than notebook-only logic
 
 ## Sprint 6: Reporting Standardization
 
@@ -474,38 +525,194 @@ Add sector and peer context so company research can be interpreted relative to c
 
 **Goal**
 
-Turn research outputs into repeatable deliverables with consistent formatting and export behavior.
+Standardize reporting around an iterative section-by-section workflow so each report section can be built, rendered, debugged, and reviewed visually before moving to the next one.
 
 **Planned Outputs**
 
-- standard table builders
-- chart helper utilities
-- report templates
-- generated Markdown or HTML reports
-- standardized scorecard formatting
+- section-level shared report outputs built from DuckDB-backed shared data products
+- one report file per section for review and debugging
+- standardized table and chart builders for each section
+- repeatable section review workflow for notebooks and later exports
+- standardized scorecard and narrative formatting that can be reused across reports
 
 **Tasks**
 
-- [ ] define standard report sections for company, sector, and portfolio outputs
-- [ ] implement reusable table rendering helpers
-- [ ] implement reusable chart rendering helpers
-- [ ] create report templates in `reports/templates/`
-- [ ] implement export flow for Markdown or HTML reports
-- [ ] standardize scorecard presentation and labeling
-- [ ] update report loaders to prefer DuckDB-backed shared datasets and marts where available
-- [ ] generate at least one sample report for company research and one for portfolio fit
-- [ ] add smoke tests for report generation paths where practical
+- [ ] define the canonical Sprint 6 report sections and lock the section-by-section implementation order
+- [ ] structure report-building so each section lands as a single file that can be reviewed independently
+- [ ] keep DuckDB as the canonical source for shared analytical tables used by report sections
+- [ ] standardize section interfaces so each section has explicit shared inputs, table outputs, chart outputs, and focused tests
+- [ ] implement `Market Performance` first as the anchor section for the Sprint 6 workflow
+- [ ] implement `Research Summary` second using the shared scorecard and section formatting patterns
+- [ ] implement `Trend and Risk Profile` once the market section contract is stable
+- [ ] implement `Balance Sheet Strength` as a point-in-time standardized section before expanding peer context
+- [ ] implement `Valuation` with shared current-state outputs first, then shared peer context where supported
+- [ ] implement `Peer Positioning` using canonical `peer_sets`, peer return outputs, and peer valuation outputs
+- [ ] implement `Score Decomposition` as a standardized transparency section built on shared scorecard outputs
+- [ ] implement `Final Research Summary` only after upstream sections expose stable structured fields
+- [ ] defer `Growth and Profitability` trend visuals until canonical historical fundamentals support is ready
+- [ ] update report loaders and section builders to prefer DuckDB-backed shared datasets and marts over raw-file or notebook-only logic
+- [ ] add focused tests for each section before advancing to the next section
+- [ ] keep notebooks as thin review layers over shared section modules rather than defining section logic inline
+
+**Recommended Section Order**
+
+1. `Market Performance`
+2. `Research Summary`
+3. `Trend and Risk Profile`
+4. `Balance Sheet Strength`
+5. `Valuation`
+6. `Peer Positioning`
+7. `Score Decomposition`
+8. `Final Research Summary`
+9. `Growth and Profitability`
+
+**Section Plan**
+
+1. `Market Performance`
+   Narrative goal:
+   show whether the stock has outperformed the broader market and its sector or style benchmark
+   Shared data inputs:
+   canonical company prices, benchmark mappings, benchmark prices, trailing return windows
+   Visuals/tables:
+   indexed price chart, trailing return comparison, optional excess-return chart, shared comparison table
+   Shared boundaries:
+   analytics in shared company analytics modules, section formatting in report outputs, thin review file for this section only
+   Focused tests:
+   return-window math, benchmark alignment, indexed rebasing, missing benchmark handling
+   Risks/dependencies:
+   benchmark assignment must stay shared and benchmark price access should continue moving toward canonical DuckDB-backed paths
+
+2. `Research Summary`
+   Narrative goal:
+   orient the reader quickly around total score, strongest support, and main watch items
+   Shared data inputs:
+   company metadata, total score, category scores, interpretation label, strengths, constraints
+   Visuals/tables:
+   score summary strip, summary table, short memo summary
+   Shared boundaries:
+   score interpretation and summary text should remain shared output builders, not notebook prose
+   Focused tests:
+   strongest and weakest pillar selection, interpretation label mapping, empty-metric fallback behavior
+   Risks/dependencies:
+   current strengths and constraints are heuristic and should remain deterministic until richer narrative fields exist
+
+3. `Trend and Risk Profile`
+   Narrative goal:
+   show whether returns came with acceptable drawdowns, volatility, and trend structure
+   Shared data inputs:
+   price history, moving averages, drawdown series, volatility metrics, current drawdown
+   Visuals/tables:
+   drawdown chart, price plus moving-average chart, compact risk panel
+   Shared boundaries:
+   reusable derived risk series in analytics and thin presentation helpers in outputs
+   Focused tests:
+   drawdown-series correctness, moving-average calculations, insufficient-history handling
+   Risks/dependencies:
+   beta and downside-volatility outputs are still missing and should not block the first standardized section
+
+4. `Balance Sheet Strength`
+   Narrative goal:
+   evaluate leverage, liquidity, and financial resilience in a standardized point-in-time section
+   Shared data inputs:
+   latest fundamentals snapshot, derived leverage metrics, later peer medians where available
+   Visuals/tables:
+   balance-sheet scorecard table first, peer leverage comparison later
+   Shared boundaries:
+   metric derivation stays in shared scorecard and analytics modules, interpretation and display stay in report outputs
+   Focused tests:
+   leverage calculations, zero-debt handling, unavailable EBITDA behavior, interpretation flags
+   Risks/dependencies:
+   interest coverage is still not modeled from canonical inputs
+
+5. `Valuation`
+   Narrative goal:
+   show whether valuation is supportive, fair, or constraining relative to current fundamentals and peers
+   Shared data inputs:
+   valuation multiples, free-cash-flow yield, peer medians, scorecard valuation metrics
+   Visuals/tables:
+   current-state valuation table first, peer comparison visual second
+   Shared boundaries:
+   peer-relative valuation logic remains shared in analytics and scorecard modules with thin report formatting
+   Focused tests:
+   peer-median fallback, free-cash-flow-yield derivation, missing peer coverage
+   Risks/dependencies:
+   historical valuation bands and valuation-versus-growth views remain out of scope until more canonical history exists
+
+6. `Peer Positioning`
+   Narrative goal:
+   show where the company sits versus canonical peers on returns and valuation
+   Shared data inputs:
+   canonical `peer_sets`, peer return comparison outputs, peer valuation comparison outputs, sector snapshot context
+   Visuals/tables:
+   peer return table, peer valuation table, later compact peer-positioning visuals
+   Shared boundaries:
+   peer definition and peer analytics remain shared data products; section file should only review and render them
+   Focused tests:
+   peer ordering, focal-company inclusion, missing peer fundamentals and prices, peer summary stats
+   Risks/dependencies:
+   this section depends on stable canonical peer data and should avoid notebook-only peer logic
+
+7. `Score Decomposition`
+   Narrative goal:
+   make the score transparent and easy to inspect at category and metric level
+   Shared data inputs:
+   metric-level scores, category weights, coverage ratios, confidence fields
+   Visuals/tables:
+   score decomposition chart, metric score table
+   Shared boundaries:
+   score math remains in the shared scorecard module and this section standardizes the review presentation
+   Focused tests:
+   score-total consistency, sort order, coverage calculations, missing metric behavior
+   Risks/dependencies:
+   low technical risk, but should follow the upstream section contracts so labels stay stable
+
+8. `Final Research Summary`
+   Narrative goal:
+   close the memo with a short, standardized takeaway tied back to structured evidence
+   Shared data inputs:
+   total score, strongest and weakest sections, major valuation and risk watch items
+   Visuals/tables:
+   short final memo text and optional compact closing summary panel
+   Shared boundaries:
+   final summary should be generated from stable shared section outputs rather than handcrafted notebook text
+   Focused tests:
+   narrative branch selection, missing-data fallback, consistency with upstream score outputs
+   Risks/dependencies:
+   should be implemented after the upstream sections expose stable structured fields
+
+9. `Growth and Profitability`
+   Narrative goal:
+   show whether the business is growing, compounding, and improving over time
+   Shared data inputs:
+   historical revenue, EPS, margin, and return-on-capital series plus peer medians when available
+   Visuals/tables:
+   growth trend charts, margin trend charts, return-on-capital summary
+   Shared boundaries:
+   requires a canonical historical fundamentals data product before the report section is standardized
+   Focused tests:
+   period alignment, growth-rate math, sparse-history handling, TTM versus annual handling
+   Risks/dependencies:
+   this remains the clearest dependency-blocked section and should come after the ready-now sections
+
+**Single-File Section Workflow**
+
+- each report section should have its own file so we can build, debug, and review it independently
+- section files should stay thin and depend on shared analytics and shared data products rather than embedding logic inline
+- section files should be landable one at a time with their own focused tests and review pass
+- notebooks should remain section reviewers, not the source of truth for section logic
 
 **Acceptance Criteria**
 
-- research outputs can be exported without manual notebook copy/paste
-- scorecards, tables, and charts use a shared presentation layer
-- generated reports are readable, repeatable, and sourced from shared modules
+- each report section can be rendered and reviewed independently before the full report is assembled
+- scorecards, tables, and charts use shared section builders and shared presentation helpers
+- report section logic lives in shared modules or section files rather than notebook-only code
+- DuckDB-backed shared tables remain the canonical analytical source for report sections
 
 **Exit Criteria**
 
-- report generation is stable enough for internal use and app embedding
-- at least two workflow types can produce standardized outputs
+- at least the ready-now report sections can be built and reviewed one by one through a repeatable shared workflow
+- the report layer is stable enough for internal section-by-section review and later app embedding
+- section outputs are standardized enough that a full end-to-end report becomes assembly work rather than bespoke notebook work
 
 **Notes**
 
@@ -677,3 +884,4 @@ The MVP is complete when the repo can:
 | Date | Update | Owner |
 |---|---|---|
 | 2026-03-29 | Initial project plan created from implementation roadmap | Codex |
+| 2026-04-04 | Expanded Sprint 6 into a section-by-section reporting plan with single-file-per-section review workflow | Codex |

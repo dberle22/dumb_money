@@ -19,6 +19,22 @@ from dumb_money.storage import (
 from dumb_money.transforms.benchmark_sets import normalize_benchmark_definition_frame
 
 BENCHMARK_HOLDINGS_MAPPING_COLUMNS = ["ticker", "name", "path", "benchmark", "sector", "industry"]
+CUSTOM_BENCHMARK_MEMBERSHIP_INPUT_COLUMNS = [
+    "benchmark_id",
+    "benchmark_ticker",
+    "benchmark_name",
+    "benchmark_category",
+    "benchmark_scope",
+    "benchmark_description",
+    "member_ticker",
+    "member_name",
+    "member_weight",
+    "member_sector",
+    "asset_class",
+    "exchange",
+    "currency",
+    "as_of_date",
+]
 NON_SECURITY_MEMBER_TICKERS = {"", "-", "NAN", "NONE", "CASH", "USD"}
 FUTURES_LIKE_TICKER_PATTERN = r"[A-Z]{2,5}[FGHJKMNQUVXZ]\d{1,2}"
 FUTURES_LIKE_NAME_PATTERN = r"\b(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\d{2}\b"
@@ -32,6 +48,16 @@ def _resolve_mapping_path(
     if mapping_path is not None:
         return Path(mapping_path)
     return settings.raw_benchmark_holdings_dir / "etf_benchmark_mapping.csv"
+
+
+def _resolve_custom_membership_path(
+    custom_membership_path: str | Path | None,
+    *,
+    settings: AppSettings,
+) -> Path:
+    if custom_membership_path is not None:
+        return Path(custom_membership_path)
+    return settings.reference_dir / "custom_benchmark_memberships.csv"
 
 
 def normalize_benchmark_mapping_frame(frame: pd.DataFrame) -> pd.DataFrame:
@@ -58,6 +84,41 @@ def normalize_benchmark_mapping_frame(frame: pd.DataFrame) -> pd.DataFrame:
         .sort_values(["ticker"])
         .reset_index(drop=True)
     )
+
+
+def normalize_custom_benchmark_memberships_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    """Normalize custom benchmark basket membership input rows."""
+
+    if frame.empty:
+        return pd.DataFrame(columns=CUSTOM_BENCHMARK_MEMBERSHIP_INPUT_COLUMNS)
+
+    normalized = frame.copy()
+    missing = [column for column in CUSTOM_BENCHMARK_MEMBERSHIP_INPUT_COLUMNS if column not in normalized.columns]
+    if missing:
+        raise ValueError(f"custom benchmark memberships frame is missing required columns: {missing}")
+
+    uppercase_columns = ["benchmark_id", "benchmark_ticker", "member_ticker", "currency"]
+    text_columns = [
+        "benchmark_name",
+        "benchmark_category",
+        "benchmark_scope",
+        "benchmark_description",
+        "member_name",
+        "member_sector",
+        "asset_class",
+        "exchange",
+        "as_of_date",
+    ]
+    for column in uppercase_columns:
+        normalized[column] = normalized[column].astype(str).str.strip().str.upper()
+    for column in text_columns:
+        normalized[column] = normalized[column].fillna("").astype(str).str.strip()
+        normalized.loc[normalized[column] == "", column] = None
+
+    normalized["member_weight"] = pd.to_numeric(normalized["member_weight"], errors="coerce")
+    normalized["asset_class"] = normalized["asset_class"].fillna("Custom").astype(str).str.strip()
+
+    return normalized[CUSTOM_BENCHMARK_MEMBERSHIP_INPUT_COLUMNS].drop_duplicates().reset_index(drop=True)
 
 
 def filter_real_security_members(frame: pd.DataFrame) -> pd.DataFrame:
@@ -155,6 +216,41 @@ def build_benchmark_definitions_from_mapping(mapping: pd.DataFrame) -> pd.DataFr
     return normalize_benchmark_definition_frame(definitions)
 
 
+def build_custom_benchmark_definitions(custom_memberships: pd.DataFrame) -> pd.DataFrame:
+    """Build canonical custom benchmark definitions from custom membership rows."""
+
+    normalized = normalize_custom_benchmark_memberships_frame(custom_memberships)
+    if normalized.empty:
+        return pd.DataFrame(columns=BENCHMARK_COLUMNS)
+
+    definitions = (
+        normalized[
+            [
+                "benchmark_id",
+                "benchmark_ticker",
+                "benchmark_name",
+                "benchmark_category",
+                "benchmark_scope",
+                "benchmark_description",
+            ]
+        ]
+        .drop_duplicates(subset=["benchmark_id"], keep="first")
+        .rename(
+            columns={
+                "benchmark_ticker": "ticker",
+                "benchmark_name": "name",
+                "benchmark_category": "category",
+                "benchmark_scope": "scope",
+                "benchmark_description": "description",
+            }
+        )
+    )
+    definitions["category"] = definitions["category"].fillna("custom").astype(str).str.strip().str.lower()
+    definitions["currency"] = "USD"
+    definitions["inception_date"] = None
+    return normalize_benchmark_definition_frame(definitions[BENCHMARK_COLUMNS])
+
+
 def _parse_spdr_holdings(path: Path) -> tuple[pd.DataFrame, str]:
     header_frame = pd.read_excel(path, sheet_name="holdings", nrows=3, header=None)
     holdings = pd.read_excel(path, sheet_name="holdings", skiprows=4)
@@ -238,6 +334,34 @@ def build_benchmark_memberships_frame(
     return memberships.sort_values(["benchmark_id", "member_ticker"]).reset_index(drop=True)
 
 
+def build_custom_benchmark_memberships_frame(custom_memberships: pd.DataFrame) -> pd.DataFrame:
+    """Build canonical membership rows for custom benchmark baskets."""
+
+    normalized = normalize_custom_benchmark_memberships_frame(custom_memberships)
+    if normalized.empty:
+        return pd.DataFrame(columns=BENCHMARK_MEMBERSHIP_COLUMNS)
+
+    memberships = normalized.rename(columns={"benchmark_ticker": "benchmark_ticker"})[
+        [
+            "benchmark_id",
+            "benchmark_ticker",
+            "member_ticker",
+            "member_name",
+            "member_weight",
+            "member_sector",
+            "asset_class",
+            "exchange",
+            "currency",
+            "as_of_date",
+        ]
+    ].copy()
+    memberships["source"] = "custom_benchmark_membership"
+    memberships["source_file"] = "custom_benchmark_memberships.csv"
+    return memberships[BENCHMARK_MEMBERSHIP_COLUMNS].drop_duplicates(
+        subset=["benchmark_id", "member_ticker"], keep="first"
+    ).sort_values(["benchmark_id", "member_ticker"]).reset_index(drop=True)
+
+
 def build_benchmark_membership_coverage_frame(
     benchmark_definitions: pd.DataFrame,
     benchmark_memberships: pd.DataFrame,
@@ -319,6 +443,7 @@ def build_benchmark_membership_coverage_frame(
 def stage_benchmark_definition_refresh(
     *,
     mapping_path: str | Path | None = None,
+    custom_membership_path: str | Path | None = None,
     settings: AppSettings | None = None,
     output_name: str = "benchmark_definitions.csv",
     write_warehouse: bool = True,
@@ -329,6 +454,14 @@ def stage_benchmark_definition_refresh(
     settings = settings or get_settings()
     mapping = pd.read_csv(_resolve_mapping_path(mapping_path, settings=settings))
     definitions = build_benchmark_definitions_from_mapping(mapping)
+    custom_path = _resolve_custom_membership_path(custom_membership_path, settings=settings)
+    if custom_path.exists():
+        custom_memberships = pd.read_csv(custom_path)
+        custom_definitions = build_custom_benchmark_definitions(custom_memberships)
+        if not custom_definitions.empty:
+            definitions = normalize_benchmark_definition_frame(
+                pd.concat([definitions, custom_definitions], ignore_index=True)
+            )
 
     if write_warehouse:
         write_canonical_table(definitions, "benchmark_definitions", settings=settings)
@@ -347,6 +480,7 @@ def stage_benchmark_definition_refresh(
 def stage_benchmark_memberships(
     *,
     mapping_path: str | Path | None = None,
+    custom_membership_path: str | Path | None = None,
     settings: AppSettings | None = None,
     output_name: str = "benchmark_memberships.csv",
     write_warehouse: bool = True,
@@ -357,6 +491,13 @@ def stage_benchmark_memberships(
     settings = settings or get_settings()
     mapping = pd.read_csv(_resolve_mapping_path(mapping_path, settings=settings))
     memberships = build_benchmark_memberships_frame(mapping, base_dir=settings.raw_benchmark_holdings_dir)
+    custom_path = _resolve_custom_membership_path(custom_membership_path, settings=settings)
+    if custom_path.exists():
+        custom_memberships = build_custom_benchmark_memberships_frame(pd.read_csv(custom_path))
+        if not custom_memberships.empty:
+            memberships = pd.concat([memberships, custom_memberships], ignore_index=True)
+            memberships = memberships.drop_duplicates(subset=["benchmark_id", "member_ticker"], keep="first")
+            memberships = memberships.sort_values(["benchmark_id", "member_ticker"]).reset_index(drop=True)
 
     if write_warehouse:
         write_canonical_table(memberships, "benchmark_memberships", settings=settings)
@@ -375,6 +516,7 @@ def stage_benchmark_memberships(
 def stage_benchmark_membership_coverage(
     *,
     mapping_path: str | Path | None = None,
+    custom_membership_path: str | Path | None = None,
     settings: AppSettings | None = None,
     output_name: str = "benchmark_membership_coverage.csv",
     write_warehouse: bool = True,
@@ -388,6 +530,7 @@ def stage_benchmark_membership_coverage(
     if definitions.empty:
         definitions = stage_benchmark_definition_refresh(
             mapping_path=mapping_path,
+            custom_membership_path=custom_membership_path,
             settings=settings,
             write_warehouse=write_warehouse,
             write_csv=write_csv,
@@ -397,6 +540,7 @@ def stage_benchmark_membership_coverage(
     if memberships.empty:
         memberships = stage_benchmark_memberships(
             mapping_path=mapping_path,
+            custom_membership_path=custom_membership_path,
             settings=settings,
             write_warehouse=write_warehouse,
             write_csv=write_csv,

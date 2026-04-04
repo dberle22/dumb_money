@@ -7,9 +7,12 @@ from dumb_money.outputs import (
     build_balance_sheet_scorecard_table,
     build_company_overview_table,
     build_final_research_summary_text,
+    build_peer_return_comparison_table,
+    build_peer_valuation_table,
     build_research_summary_table,
     build_research_summary_text,
     build_risk_metric_table,
+    build_sector_snapshot_table,
     build_scorecard_metrics_table,
     build_trailing_return_comparison_table,
     build_valuation_summary_table,
@@ -33,9 +36,12 @@ def test_company_report_tables_and_charts_build_from_aapl_packet() -> None:
     overview = build_company_overview_table(packet)
     research_summary = build_research_summary_table(packet)
     trailing_returns = build_trailing_return_comparison_table(packet)
+    peer_returns = build_peer_return_comparison_table(packet)
     risk_table = build_risk_metric_table(packet)
+    sector_snapshot = build_sector_snapshot_table(packet)
     balance_sheet = build_balance_sheet_scorecard_table(packet)
     valuation = build_valuation_summary_table(packet)
+    peer_valuation = build_peer_valuation_table(packet)
     metrics = build_scorecard_metrics_table(packet)
     summary_text = build_research_summary_text(packet)
     final_text = build_final_research_summary_text(packet)
@@ -43,9 +49,12 @@ def test_company_report_tables_and_charts_build_from_aapl_packet() -> None:
     assert overview["label"].tolist()[:3] == ["Ticker", "Company", "Sector"]
     assert research_summary["label"].tolist()[:2] == ["Company", "Ticker"]
     assert trailing_returns["Window"].tolist() == ["1m", "3m", "6m", "1y"]
+    assert "Excess Return" in peer_returns.columns
     assert "Current Drawdown" in risk_table["label"].tolist()
+    assert "Sector Benchmark" in sector_snapshot["label"].tolist()
     assert "Interpretation" in balance_sheet.columns
     assert "Interpretation" in valuation.columns
+    assert "Role" in peer_valuation.columns
     assert "Metric" in metrics.columns
     assert "screens as" in summary_text.lower()
     assert packet.ticker in final_text
@@ -84,3 +93,21 @@ def test_company_research_notebook_exists_and_uses_shared_modules() -> None:
     assert "render_indexed_price_performance_chart" in joined
     assert "render_drawdown_chart" in joined
     assert "render_score_decomposition_chart" in joined
+
+
+def test_sector_research_notebook_exists_and_uses_shared_modules() -> None:
+    notebook_path = Path("notebooks/03_sector_research/aapl_sector_peer_research.ipynb")
+    notebook = json.loads(notebook_path.read_text())
+
+    assert notebook["nbformat"] == 4
+    cell_sources = ["".join(cell.get("source", [])) for cell in notebook["cells"]]
+    joined = "\n".join(cell_sources)
+
+    assert "## Research Summary" in joined
+    assert "## Sector Snapshot" in joined
+    assert "## Peer Return Context" in joined
+    assert "## Peer Valuation Context" in joined
+    assert "build_company_research_packet" in joined
+    assert "build_sector_snapshot_table" in joined
+    assert "build_peer_return_comparison_table" in joined
+    assert "build_peer_valuation_table" in joined

@@ -78,6 +78,8 @@ def test_stage_all_command_dispatches_transform_builds(monkeypatch) -> None:
             "benchmark_defs.csv",
             "--benchmark-mapping-path",
             "benchmark_mapping.csv",
+            "--custom-benchmark-membership-path",
+            "custom_benchmark_memberships.csv",
             "--override-paths",
             "security_master_overrides.csv",
             "--set-id",
@@ -97,8 +99,20 @@ def test_stage_all_command_dispatches_transform_builds(monkeypatch) -> None:
             "security_master_overrides",
             {"input_paths": ["security_master_overrides.csv"]},
         ),
-        ("benchmark_definitions", {"mapping_path": "benchmark_mapping.csv"}),
-        ("benchmark_memberships", {"mapping_path": "benchmark_mapping.csv"}),
+        (
+            "benchmark_definitions",
+            {
+                "mapping_path": "benchmark_mapping.csv",
+                "custom_membership_path": "custom_benchmark_memberships.csv",
+            },
+        ),
+        (
+            "benchmark_memberships",
+            {
+                "mapping_path": "benchmark_mapping.csv",
+                "custom_membership_path": "custom_benchmark_memberships.csv",
+            },
+        ),
         ("benchmark_sets", {"input_paths": ["benchmark_defs.csv"], "set_id": "core_us"}),
         (
             "security_master",
@@ -111,5 +125,11 @@ def test_stage_all_command_dispatches_transform_builds(monkeypatch) -> None:
         ),
         ("benchmark_mappings", {"mapping_path": "benchmark_mapping.csv"}),
         ("security_ingestion_status", {}),
-        ("benchmark_membership_coverage", {"mapping_path": "benchmark_mapping.csv"}),
+        (
+            "benchmark_membership_coverage",
+            {
+                "mapping_path": "benchmark_mapping.csv",
+                "custom_membership_path": "custom_benchmark_memberships.csv",
+            },
+        ),
     ]

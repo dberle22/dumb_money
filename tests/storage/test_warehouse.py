@@ -238,6 +238,54 @@ def test_duckdb_tables_support_membership_price_and_fundamentals_joins(tmp_path)
     assert joined.loc[0, "fundamentals_rows"] == 1
 
 
+def test_write_and_read_peer_sets_round_trip(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    peer_sets = pd.DataFrame(
+        {
+            "peer_set_id": ["peer_set::AAPL", "peer_set::AAPL"],
+            "ticker": ["AAPL", "AAPL"],
+            "peer_ticker": ["MSFT", "DELL"],
+            "relationship_type": ["sector", "sector"],
+            "sector": ["Technology", "Technology"],
+            "industry": ["Consumer Electronics", "Consumer Electronics"],
+            "selection_method": ["sector_market_cap_proximity", "sector_market_cap_proximity"],
+            "peer_order": [1, 2],
+        }
+    )
+
+    write_canonical_table(peer_sets, "peer_sets", settings=settings)
+    loaded = read_canonical_table("peer_sets", settings=settings)
+
+    assert_frame_equal(loaded, peer_sets, check_dtype=False)
+
+
+def test_write_and_read_sector_snapshots_round_trip(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    sector_snapshots = pd.DataFrame(
+        {
+            "sector": ["Technology"],
+            "sector_benchmark": ["XLK"],
+            "company_count": [2],
+            "companies_with_fundamentals": [2],
+            "companies_with_prices": [2],
+            "median_market_cap": [3100.0],
+            "median_forward_pe": [27.5],
+            "median_ev_to_ebitda": [19.0],
+            "median_price_to_sales": [8.0],
+            "median_free_cash_flow_yield": [0.036],
+            "median_operating_margin": [0.36],
+            "median_gross_margin": [0.565],
+            "median_return_6m": [0.25],
+            "median_return_1y": [0.60],
+        }
+    )
+
+    write_canonical_table(sector_snapshots, "sector_snapshots", settings=settings)
+    loaded = read_canonical_table("sector_snapshots", settings=settings)
+
+    assert_frame_equal(loaded, sector_snapshots, check_dtype=False)
+
+
 def test_stage_security_ingestion_status_summarizes_coverage(tmp_path) -> None:
     settings = AppSettings(project_root=tmp_path)
     security_master = pd.DataFrame(

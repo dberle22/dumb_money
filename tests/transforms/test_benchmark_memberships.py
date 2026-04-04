@@ -9,9 +9,12 @@ from dumb_money.transforms.benchmark_memberships import (
     build_benchmark_definitions_from_mapping,
     build_benchmark_membership_coverage_frame,
     build_benchmark_memberships_frame,
+    build_custom_benchmark_definitions,
+    build_custom_benchmark_memberships_frame,
     filter_real_security_members,
     get_real_benchmark_member_tickers,
     normalize_benchmark_mapping_frame,
+    normalize_custom_benchmark_memberships_frame,
     stage_benchmark_definition_refresh,
     stage_benchmark_membership_coverage,
     stage_benchmark_memberships,
@@ -107,6 +110,71 @@ def test_build_benchmark_definitions_and_memberships_from_mapping(tmp_path) -> N
     assert sorted(memberships["member_ticker"].tolist()) == ["AAPL", "APA", "BE", "FN", "MSFT"]
 
 
+def test_build_custom_benchmark_definitions_and_memberships() -> None:
+    custom_memberships = pd.DataFrame(
+        [
+            {
+                "benchmark_id": "AI_MIX",
+                "benchmark_ticker": "AI_MIX",
+                "benchmark_name": "AI Mixed Basket",
+                "benchmark_category": "custom",
+                "benchmark_scope": "ai_strategy",
+                "benchmark_description": "Mixed AI basket across stock, ETF, and index proxies.",
+                "member_ticker": "NVDA",
+                "member_name": "NVIDIA Corp.",
+                "member_weight": 0.5,
+                "member_sector": "Technology",
+                "asset_class": "Equity",
+                "exchange": "NASDAQ",
+                "currency": "USD",
+                "as_of_date": "2026-04-03",
+            },
+            {
+                "benchmark_id": "AI_MIX",
+                "benchmark_ticker": "AI_MIX",
+                "benchmark_name": "AI Mixed Basket",
+                "benchmark_category": "custom",
+                "benchmark_scope": "ai_strategy",
+                "benchmark_description": "Mixed AI basket across stock, ETF, and index proxies.",
+                "member_ticker": "SOXX",
+                "member_name": "iShares Semiconductor ETF",
+                "member_weight": 0.3,
+                "member_sector": "Technology",
+                "asset_class": "ETF",
+                "exchange": "NASDAQ",
+                "currency": "USD",
+                "as_of_date": "2026-04-03",
+            },
+            {
+                "benchmark_id": "AI_MIX",
+                "benchmark_ticker": "AI_MIX",
+                "benchmark_name": "AI Mixed Basket",
+                "benchmark_category": "custom",
+                "benchmark_scope": "ai_strategy",
+                "benchmark_description": "Mixed AI basket across stock, ETF, and index proxies.",
+                "member_ticker": "^SOX",
+                "member_name": "PHLX Semiconductor Index",
+                "member_weight": 0.2,
+                "member_sector": "Technology",
+                "asset_class": "Index",
+                "exchange": None,
+                "currency": "USD",
+                "as_of_date": "2026-04-03",
+            },
+        ]
+    )
+
+    normalized = normalize_custom_benchmark_memberships_frame(custom_memberships)
+    definitions = build_custom_benchmark_definitions(normalized)
+    memberships = build_custom_benchmark_memberships_frame(normalized)
+
+    assert definitions["benchmark_id"].tolist() == ["AI_MIX"]
+    assert definitions["category"].tolist() == ["custom"]
+    assert memberships["benchmark_id"].tolist() == ["AI_MIX", "AI_MIX", "AI_MIX"]
+    assert memberships["member_ticker"].tolist() == ["NVDA", "SOXX", "^SOX"]
+    assert memberships["asset_class"].tolist() == ["Equity", "ETF", "Index"]
+
+
 def test_stage_benchmark_memberships_and_coverage_write_outputs(tmp_path) -> None:
     settings = AppSettings(project_root=tmp_path)
     holdings_dir = settings.raw_benchmark_holdings_dir
@@ -155,6 +223,88 @@ def test_stage_benchmark_memberships_and_coverage_write_outputs(tmp_path) -> Non
     assert (settings.benchmark_definitions_dir / "benchmark_definitions.csv").exists()
     assert (settings.benchmark_memberships_dir / "benchmark_memberships.csv").exists()
     assert (settings.benchmark_membership_coverage_dir / "benchmark_membership_coverage.csv").exists()
+
+
+def test_stage_benchmark_memberships_includes_custom_baskets(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    holdings_dir = settings.raw_benchmark_holdings_dir
+    holdings_dir.mkdir(parents=True)
+    mapping_path = holdings_dir / "etf_benchmark_mapping.csv"
+    custom_path = settings.reference_dir / "custom_benchmark_memberships.csv"
+    settings.reference_dir.mkdir(parents=True, exist_ok=True)
+
+    _write_spdr_fixture(
+        holdings_dir / "spy_holdings.xlsx",
+        "SPY",
+        "State Street SPDR S&P 500 ETF Trust",
+        pd.DataFrame(
+            {
+                "Name": ["Apple Inc."],
+                "Ticker": ["AAPL"],
+                "Identifier": ["037833100"],
+                "SEDOL": ["2046251"],
+                "Weight": [7.0],
+                "Sector": ["Technology"],
+                "Shares Held": [1],
+                "Local Currency": ["USD"],
+            }
+        ),
+    )
+    mapping_path.write_text(
+        "ticker,name,path,benchmark,sector,industry\n"
+        "SPY,State Street SPDR S&P 500 ETF Trust,spy_holdings.xlsx,S&P 500,,\n"
+    )
+    pd.DataFrame(
+        [
+            {
+                "benchmark_id": "AI_MIX",
+                "benchmark_ticker": "AI_MIX",
+                "benchmark_name": "AI Mixed Basket",
+                "benchmark_category": "custom",
+                "benchmark_scope": "ai_strategy",
+                "benchmark_description": "Mixed AI basket.",
+                "member_ticker": "NVDA",
+                "member_name": "NVIDIA Corp.",
+                "member_weight": 0.5,
+                "member_sector": "Technology",
+                "asset_class": "Equity",
+                "exchange": "NASDAQ",
+                "currency": "USD",
+                "as_of_date": "2026-04-03",
+            },
+            {
+                "benchmark_id": "AI_MIX",
+                "benchmark_ticker": "AI_MIX",
+                "benchmark_name": "AI Mixed Basket",
+                "benchmark_category": "custom",
+                "benchmark_scope": "ai_strategy",
+                "benchmark_description": "Mixed AI basket.",
+                "member_ticker": "SOXX",
+                "member_name": "iShares Semiconductor ETF",
+                "member_weight": 0.5,
+                "member_sector": "Technology",
+                "asset_class": "ETF",
+                "exchange": "NASDAQ",
+                "currency": "USD",
+                "as_of_date": "2026-04-03",
+            },
+        ]
+    ).to_csv(custom_path, index=False)
+
+    definitions = stage_benchmark_definition_refresh(
+        mapping_path=mapping_path,
+        custom_membership_path=custom_path,
+        settings=settings,
+    )
+    memberships = stage_benchmark_memberships(
+        mapping_path=mapping_path,
+        custom_membership_path=custom_path,
+        settings=settings,
+    )
+
+    assert set(definitions["benchmark_id"]) == {"AI_MIX", "SPY"}
+    assert "AI_MIX" in memberships["benchmark_id"].tolist()
+    assert "SOXX" in memberships["member_ticker"].tolist()
 
 
 def test_build_benchmark_membership_coverage_frame_flags_missing_members() -> None:

@@ -44,6 +44,34 @@ BENCHMARK_MAPPING_COLUMNS = [
     "notes",
 ]
 
+PEER_SET_COLUMNS = [
+    "peer_set_id",
+    "ticker",
+    "peer_ticker",
+    "relationship_type",
+    "sector",
+    "industry",
+    "selection_method",
+    "peer_order",
+]
+
+SECTOR_SNAPSHOT_COLUMNS = [
+    "sector",
+    "sector_benchmark",
+    "company_count",
+    "companies_with_fundamentals",
+    "companies_with_prices",
+    "median_market_cap",
+    "median_forward_pe",
+    "median_ev_to_ebitda",
+    "median_price_to_sales",
+    "median_free_cash_flow_yield",
+    "median_operating_margin",
+    "median_gross_margin",
+    "median_return_6m",
+    "median_return_1y",
+]
+
 SECURITY_INGESTION_STATUS_COLUMNS = [
     "ticker",
     "security_id",
@@ -238,6 +266,20 @@ CANONICAL_DUCKDB_TABLES: dict[str, WarehouseTableSpec] = {
         csv_dir_attr="benchmark_mappings_dir",
         csv_file_name="benchmark_mappings.csv",
         description="Canonical benchmark assignment table for shared company and sector workflows.",
+    ),
+    "peer_sets": WarehouseTableSpec(
+        table_name="peer_sets",
+        columns=tuple(PEER_SET_COLUMNS),
+        csv_dir_attr="staging_dir",
+        csv_file_name="peer_sets/peer_sets.csv",
+        description="Canonical peer-group membership table for shared peer-relative research workflows.",
+    ),
+    "sector_snapshots": WarehouseTableSpec(
+        table_name="sector_snapshots",
+        columns=tuple(SECTOR_SNAPSHOT_COLUMNS),
+        csv_dir_attr="staging_dir",
+        csv_file_name="sector_snapshots/sector_snapshots.csv",
+        description="Canonical per-sector summary table for reusable sector context in company research and reporting.",
     ),
     "security_ingestion_status": WarehouseTableSpec(
         table_name="security_ingestion_status",

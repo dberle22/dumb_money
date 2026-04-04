@@ -72,6 +72,38 @@ def _to_float(value: Any) -> float | None:
     return float(value)
 
 
+def _lookup_peer_median(
+    peer_valuation_comparison: pd.DataFrame | None,
+    column: str,
+) -> float | None:
+    if peer_valuation_comparison is None or peer_valuation_comparison.empty or column not in peer_valuation_comparison.columns:
+        return None
+
+    peer_mask = peer_valuation_comparison["is_focal_company"].astype("boolean").fillna(False)
+    peers = peer_valuation_comparison.loc[~peer_mask].copy()
+    if peers.empty:
+        return None
+    values = pd.to_numeric(peers[column], errors="coerce").dropna()
+    if values.empty:
+        return None
+    return float(values.median())
+
+
+def _score_relative_discount(
+    company_value: float | None,
+    peer_median: float | None,
+) -> tuple[float | None, str]:
+    if company_value is None or peer_median is None or peer_median == 0:
+        return None, "threshold"
+
+    premium_to_peer = (company_value / peer_median) - 1
+    normalized_value = _score_lower_is_better(
+        premium_to_peer,
+        [(-0.20, 1.0), (-0.05, 0.75), (0.10, 0.5), (0.25, 0.25)],
+    )
+    return normalized_value, "peer_relative"
+
+
 def _lookup_excess_return(
     benchmark_comparison: pd.DataFrame,
     benchmark_ticker: str | None,
@@ -120,6 +152,7 @@ def build_company_scorecard(
     risk_metrics: dict[str, float | None],
     trend_metrics: dict[str, float | bool | None],
     fundamentals_summary: dict[str, Any],
+    peer_valuation_comparison: pd.DataFrame | None = None,
     primary_benchmark: str = DEFAULT_PRIMARY_BENCHMARK,
     secondary_benchmark: str | None = None,
     sector_benchmark_map: dict[str, str] | None = None,
@@ -400,6 +433,12 @@ def build_company_scorecard(
         if free_cash_flow_yield is not None
         else "Uses dividend yield because free cash flow yield was unavailable."
     )
+    peer_forward_pe = _lookup_peer_median(peer_valuation_comparison, "forward_pe")
+    peer_ev_to_ebitda = _lookup_peer_median(peer_valuation_comparison, "ev_to_ebitda")
+    peer_price_to_sales = _lookup_peer_median(peer_valuation_comparison, "price_to_sales")
+    forward_pe_normalized, forward_pe_method = _score_relative_discount(forward_pe, peer_forward_pe)
+    ev_to_ebitda_normalized, ev_to_ebitda_method = _score_relative_discount(ev_to_ebitda, peer_ev_to_ebitda)
+    price_to_sales_normalized, price_to_sales_method = _score_relative_discount(price_to_sales, peer_price_to_sales)
 
     add_metric(
         metric_id="forward_pe",
@@ -407,11 +446,21 @@ def build_company_scorecard(
         metric_name="Forward P/E",
         metric_weight=5.0,
         raw_value=forward_pe,
-        scoring_method="threshold",
-        normalized_value=None
-        if forward_pe is None
-        else _score_lower_is_better(forward_pe, [(15.0, 1.0), (22.0, 0.75), (30.0, 0.5), (40.0, 0.25)]),
-        notes="Absolute threshold scoring for V1.",
+        scoring_method=forward_pe_method,
+        normalized_value=(
+            forward_pe_normalized
+            if forward_pe_normalized is not None
+            else (
+                None
+                if forward_pe is None
+                else _score_lower_is_better(forward_pe, [(15.0, 1.0), (22.0, 0.75), (30.0, 0.5), (40.0, 0.25)])
+            )
+        ),
+        notes=(
+            f"Peer-relative scoring versus peer median {peer_forward_pe:.2f}x."
+            if forward_pe_normalized is not None and peer_forward_pe is not None
+            else "Absolute threshold scoring for V1."
+        ),
     )
     add_metric(
         metric_id="ev_to_ebitda",
@@ -419,11 +468,21 @@ def build_company_scorecard(
         metric_name="EV to EBITDA",
         metric_weight=4.0,
         raw_value=ev_to_ebitda,
-        scoring_method="threshold",
-        normalized_value=None
-        if ev_to_ebitda is None
-        else _score_lower_is_better(ev_to_ebitda, [(10.0, 1.0), (15.0, 0.75), (22.0, 0.5), (30.0, 0.25)]),
-        notes="Absolute threshold scoring for V1.",
+        scoring_method=ev_to_ebitda_method,
+        normalized_value=(
+            ev_to_ebitda_normalized
+            if ev_to_ebitda_normalized is not None
+            else (
+                None
+                if ev_to_ebitda is None
+                else _score_lower_is_better(ev_to_ebitda, [(10.0, 1.0), (15.0, 0.75), (22.0, 0.5), (30.0, 0.25)])
+            )
+        ),
+        notes=(
+            f"Peer-relative scoring versus peer median {peer_ev_to_ebitda:.2f}x."
+            if ev_to_ebitda_normalized is not None and peer_ev_to_ebitda is not None
+            else "Absolute threshold scoring for V1."
+        ),
     )
     add_metric(
         metric_id="price_to_sales",
@@ -431,11 +490,21 @@ def build_company_scorecard(
         metric_name="Price to sales",
         metric_weight=3.0,
         raw_value=price_to_sales,
-        scoring_method="threshold",
-        normalized_value=None
-        if price_to_sales is None
-        else _score_lower_is_better(price_to_sales, [(2.0, 1.0), (4.0, 0.75), (7.0, 0.5), (10.0, 0.25)]),
-        notes="Absolute threshold scoring for V1.",
+        scoring_method=price_to_sales_method,
+        normalized_value=(
+            price_to_sales_normalized
+            if price_to_sales_normalized is not None
+            else (
+                None
+                if price_to_sales is None
+                else _score_lower_is_better(price_to_sales, [(2.0, 1.0), (4.0, 0.75), (7.0, 0.5), (10.0, 0.25)])
+            )
+        ),
+        notes=(
+            f"Peer-relative scoring versus peer median {peer_price_to_sales:.2f}x."
+            if price_to_sales_normalized is not None and peer_price_to_sales is not None
+            else "Absolute threshold scoring for V1."
+        ),
     )
     add_metric(
         metric_id="yield_metric",

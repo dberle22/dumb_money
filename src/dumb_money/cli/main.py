@@ -144,6 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
     stage_parser.add_argument("--benchmark-definition-paths", type=_path_list)
     stage_parser.add_argument("--override-paths", type=_path_list)
     stage_parser.add_argument("--benchmark-mapping-path", type=str)
+    stage_parser.add_argument("--custom-benchmark-membership-path", type=str)
     stage_parser.add_argument("--set-id", default="default_benchmarks")
 
     return parser
@@ -295,9 +296,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             stage_security_master_overrides(input_paths=args.override_paths)
         if args.target in {"benchmark-definitions", "all"}:
-            stage_benchmark_definition_refresh(mapping_path=args.benchmark_mapping_path)
+            stage_benchmark_definition_refresh(
+                mapping_path=args.benchmark_mapping_path,
+                custom_membership_path=args.custom_benchmark_membership_path,
+            )
         if args.target in {"benchmark-memberships", "all"}:
-            stage_benchmark_memberships(mapping_path=args.benchmark_mapping_path)
+            stage_benchmark_memberships(
+                mapping_path=args.benchmark_mapping_path,
+                custom_membership_path=args.custom_benchmark_membership_path,
+            )
         if args.target in {"benchmark-sets", "all"}:
             stage_benchmark_sets(
                 input_paths=args.benchmark_definition_paths,
@@ -315,7 +322,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.target in {"security-ingestion-status", "all"}:
             stage_security_ingestion_status()
         if args.target in {"benchmark-membership-coverage", "all"}:
-            stage_benchmark_membership_coverage(mapping_path=args.benchmark_mapping_path)
+            stage_benchmark_membership_coverage(
+                mapping_path=args.benchmark_mapping_path,
+                custom_membership_path=args.custom_benchmark_membership_path,
+            )
         return 0
 
     parser.error(f"unknown command: {args.command}")

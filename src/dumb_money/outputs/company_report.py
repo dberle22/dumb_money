@@ -438,6 +438,106 @@ def build_valuation_summary_table(packet: CompanyResearchPacket) -> pd.DataFrame
     )
 
 
+def build_peer_valuation_table(packet: CompanyResearchPacket) -> pd.DataFrame:
+    """Build a report-friendly peer valuation comparison table."""
+
+    peer_valuation = packet.peer_valuation_comparison.copy()
+    if peer_valuation.empty:
+        return peer_valuation
+
+    display = peer_valuation.copy()
+    display["Role"] = display["is_focal_company"].map(lambda value: "Company" if value else "Peer")
+    display["Forward P/E"] = display["forward_pe"].map(_format_ratio)
+    display["EV/EBITDA"] = display["ev_to_ebitda"].map(_format_ratio)
+    display["Price/Sales"] = display["price_to_sales"].map(_format_ratio)
+    display["FCF Yield"] = display["free_cash_flow_yield"].map(_format_percent)
+    display["Market Cap"] = display["market_cap"].map(_format_billions)
+    return display[
+        [
+            "Role",
+            "ticker",
+            "company_name",
+            "relationship_type",
+            "selection_method",
+            "Market Cap",
+            "Forward P/E",
+            "EV/EBITDA",
+            "Price/Sales",
+            "FCF Yield",
+        ]
+    ].rename(
+        columns={
+            "ticker": "Ticker",
+            "company_name": "Company",
+            "relationship_type": "Relationship",
+            "selection_method": "Selection Method",
+        }
+    )
+
+
+def build_peer_return_comparison_table(packet: CompanyResearchPacket) -> pd.DataFrame:
+    """Build a report-friendly peer return comparison table."""
+
+    peer_returns = packet.peer_return_comparison.copy()
+    if peer_returns.empty:
+        return peer_returns
+
+    focus_window = packet.peer_return_summary_stats.get("focus_window", "1y")
+    display = peer_returns.loc[peer_returns["window"] == focus_window].copy()
+    display["Role"] = display["is_focal_company"].map(lambda value: "Company" if value else "Peer")
+    display["Company Return"] = display["company_return"].map(_format_percent)
+    display["Peer Return"] = display["peer_return"].map(_format_percent)
+    display["Excess Return"] = display["excess_return"].map(_format_percent)
+    return display[
+        [
+            "Role",
+            "ticker",
+            "relationship_type",
+            "selection_method",
+            "window",
+            "Company Return",
+            "Peer Return",
+            "Excess Return",
+        ]
+    ].rename(
+        columns={
+            "ticker": "Ticker",
+            "relationship_type": "Relationship",
+            "selection_method": "Selection Method",
+            "window": "Window",
+        }
+    )
+
+
+def build_sector_snapshot_table(packet: CompanyResearchPacket) -> pd.DataFrame:
+    """Build a report-friendly sector snapshot summary table."""
+
+    snapshot = packet.sector_snapshot
+    if not snapshot:
+        return pd.DataFrame(columns=REPORT_COLUMNS)
+
+    rows = [
+        ("Sector", snapshot.get("sector") or "N/A"),
+        ("Sector Benchmark", snapshot.get("sector_benchmark") or "N/A"),
+        ("Companies In Sector", str(int(snapshot["company_count"])) if pd.notna(snapshot.get("company_count")) else "N/A"),
+        (
+            "Companies With Fundamentals",
+            str(int(snapshot["companies_with_fundamentals"])) if pd.notna(snapshot.get("companies_with_fundamentals")) else "N/A",
+        ),
+        ("Companies With Prices", str(int(snapshot["companies_with_prices"])) if pd.notna(snapshot.get("companies_with_prices")) else "N/A"),
+        ("Median Market Cap", _format_billions(snapshot.get("median_market_cap"))),
+        ("Median Forward P/E", _format_ratio(snapshot.get("median_forward_pe"))),
+        ("Median EV/EBITDA", _format_ratio(snapshot.get("median_ev_to_ebitda"))),
+        ("Median Price/Sales", _format_ratio(snapshot.get("median_price_to_sales"))),
+        ("Median FCF Yield", _format_percent(snapshot.get("median_free_cash_flow_yield"))),
+        ("Median Operating Margin", _format_percent(snapshot.get("median_operating_margin"))),
+        ("Median Gross Margin", _format_percent(snapshot.get("median_gross_margin"))),
+        ("Median 6M Return", _format_percent(snapshot.get("median_return_6m"))),
+        ("Median 1Y Return", _format_percent(snapshot.get("median_return_1y"))),
+    ]
+    return pd.DataFrame(rows, columns=REPORT_COLUMNS)
+
+
 def build_research_summary_text(packet: CompanyResearchPacket, *, short: bool = False) -> str:
     """Build a short memo-style interpretation of the current scorecard."""
 
@@ -764,6 +864,9 @@ __all__ = [
     "build_benchmark_comparison_table",
     "build_company_overview_table",
     "build_final_research_summary_text",
+    "build_sector_snapshot_table",
+    "build_peer_return_comparison_table",
+    "build_peer_valuation_table",
     "build_research_summary_table",
     "build_research_summary_text",
     "build_return_windows_table",

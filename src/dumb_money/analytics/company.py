@@ -385,3 +385,313 @@ def build_benchmark_comparison(
             )
 
     return pd.DataFrame(rows)
+
+
+def build_peer_valuation_comparison(
+    ticker: str,
+    peer_sets: pd.DataFrame,
+    fundamentals: pd.DataFrame,
+) -> pd.DataFrame:
+    """Build a latest-snapshot peer valuation panel for one ticker."""
+
+    normalized_ticker = ticker.strip().upper()
+    if fundamentals.empty:
+        return pd.DataFrame(
+            columns=[
+                "ticker",
+                "company_name",
+                "relationship_type",
+                "selection_method",
+                "peer_order",
+                "is_focal_company",
+                "sector",
+                "industry",
+                "market_cap",
+                "forward_pe",
+                "ev_to_ebitda",
+                "price_to_sales",
+                "free_cash_flow_yield",
+            ]
+        )
+
+    latest_rows: list[dict[str, Any]] = []
+    for candidate_ticker in sorted({normalized_ticker, *peer_sets.get("peer_ticker", pd.Series(dtype=str)).astype(str).str.upper().tolist()}):
+        summary = build_fundamentals_summary(fundamentals, candidate_ticker)
+        if len(summary) <= 1:
+            continue
+        free_cash_flow = summary.get("free_cash_flow")
+        market_cap = summary.get("market_cap")
+        free_cash_flow_yield = (
+            float(free_cash_flow) / float(market_cap)
+            if pd.notna(free_cash_flow) and pd.notna(market_cap) and float(market_cap) > 0
+            else None
+        )
+        latest_rows.append(
+            {
+                "ticker": candidate_ticker,
+                "company_name": summary.get("long_name"),
+                "sector": summary.get("sector"),
+                "industry": summary.get("industry"),
+                "market_cap": summary.get("market_cap"),
+                "forward_pe": summary.get("forward_pe"),
+                "ev_to_ebitda": summary.get("ev_to_ebitda"),
+                "price_to_sales": summary.get("price_to_sales"),
+                "free_cash_flow_yield": free_cash_flow_yield,
+            }
+        )
+
+    if not latest_rows:
+        return pd.DataFrame(
+            columns=[
+                "ticker",
+                "company_name",
+                "relationship_type",
+                "selection_method",
+                "peer_order",
+                "is_focal_company",
+                "sector",
+                "industry",
+                "market_cap",
+                "forward_pe",
+                "ev_to_ebitda",
+                "price_to_sales",
+                "free_cash_flow_yield",
+            ]
+        )
+
+    latest_frame = pd.DataFrame(latest_rows)
+    focal_row = latest_frame.loc[latest_frame["ticker"] == normalized_ticker].copy()
+    if focal_row.empty:
+        return pd.DataFrame(columns=[
+            "ticker",
+            "company_name",
+            "relationship_type",
+            "selection_method",
+            "peer_order",
+            "is_focal_company",
+            "sector",
+            "industry",
+            "market_cap",
+            "forward_pe",
+            "ev_to_ebitda",
+            "price_to_sales",
+            "free_cash_flow_yield",
+        ])
+
+    focal_row["relationship_type"] = "focal_company"
+    focal_row["selection_method"] = "self"
+    focal_row["peer_order"] = 0
+    focal_row["is_focal_company"] = True
+
+    peer_members = peer_sets.loc[
+        peer_sets.get("ticker", pd.Series(dtype=str)).astype(str).str.upper() == normalized_ticker
+    ].copy()
+    if peer_members.empty:
+        peers = pd.DataFrame(columns=focal_row.columns)
+    else:
+        peer_members["peer_ticker"] = peer_members["peer_ticker"].astype(str).str.upper()
+        peers = peer_members.merge(
+            latest_frame,
+            left_on="peer_ticker",
+            right_on="ticker",
+            how="left",
+            suffixes=("_peer_set", ""),
+        )
+        peers["ticker"] = peers["peer_ticker"]
+        peers["is_focal_company"] = False
+        peers = peers[
+            [
+                "ticker",
+                "company_name",
+                "relationship_type",
+                "selection_method",
+                "peer_order",
+                "is_focal_company",
+                "sector",
+                "industry",
+                "market_cap",
+                "forward_pe",
+                "ev_to_ebitda",
+                "price_to_sales",
+                "free_cash_flow_yield",
+            ]
+        ]
+
+    focal_row = focal_row[
+        [
+            "ticker",
+            "company_name",
+            "relationship_type",
+            "selection_method",
+            "peer_order",
+            "is_focal_company",
+            "sector",
+            "industry",
+            "market_cap",
+            "forward_pe",
+            "ev_to_ebitda",
+            "price_to_sales",
+            "free_cash_flow_yield",
+        ]
+    ]
+    combined = pd.concat([focal_row, peers], ignore_index=True) if not peers.empty else focal_row.copy()
+    return combined.sort_values(["peer_order", "ticker"]).reset_index(drop=True)
+
+
+def build_peer_return_comparison(
+    ticker: str,
+    peer_sets: pd.DataFrame,
+    prices: pd.DataFrame,
+    *,
+    windows: Mapping[str, int] | None = None,
+) -> pd.DataFrame:
+    """Build a peer-relative trailing return panel for one ticker."""
+
+    windows = windows or STANDARD_RETURN_WINDOWS
+    normalized_ticker = ticker.strip().upper()
+    company_history = prepare_price_history(prices, normalized_ticker)
+    company_returns = calculate_return_windows(company_history, windows=windows)[["window", "total_return"]].rename(
+        columns={"total_return": "company_return"}
+    )
+    if company_returns.empty:
+        return pd.DataFrame(
+            columns=[
+                "ticker",
+                "relationship_type",
+                "selection_method",
+                "peer_order",
+                "window",
+                "company_return",
+                "peer_return",
+                "excess_return",
+                "is_focal_company",
+            ]
+        )
+
+    rows: list[dict[str, Any]] = []
+    for company_row in company_returns.to_dict(orient="records"):
+        rows.append(
+            {
+                "ticker": normalized_ticker,
+                "relationship_type": "focal_company",
+                "selection_method": "self",
+                "peer_order": 0,
+                "window": company_row["window"],
+                "company_return": company_row["company_return"],
+                "peer_return": company_row["company_return"],
+                "excess_return": 0.0 if pd.notna(company_row["company_return"]) else pd.NA,
+                "is_focal_company": True,
+            }
+        )
+
+    peer_members = (
+        peer_sets.loc[peer_sets.get("ticker", pd.Series(dtype=str)).astype(str).str.upper() == normalized_ticker].copy()
+        if not peer_sets.empty
+        else pd.DataFrame()
+    )
+    if peer_members.empty:
+        return pd.DataFrame(rows)
+
+    for peer_row in peer_members.to_dict(orient="records"):
+        peer_ticker = str(peer_row["peer_ticker"]).strip().upper()
+        peer_history = prepare_price_history(prices, peer_ticker)
+        peer_returns = calculate_return_windows(peer_history, windows=windows).set_index("window")
+        for company_row in company_returns.to_dict(orient="records"):
+            peer_return = (
+                peer_returns.loc[company_row["window"], "total_return"]
+                if company_row["window"] in peer_returns.index
+                else pd.NA
+            )
+            company_return = company_row["company_return"]
+            rows.append(
+                {
+                    "ticker": peer_ticker,
+                    "relationship_type": peer_row.get("relationship_type"),
+                    "selection_method": peer_row.get("selection_method"),
+                    "peer_order": peer_row.get("peer_order"),
+                    "window": company_row["window"],
+                    "company_return": company_return,
+                    "peer_return": peer_return,
+                    "excess_return": (
+                        company_return - peer_return
+                        if pd.notna(company_return) and pd.notna(peer_return)
+                        else pd.NA
+                    ),
+                    "is_focal_company": False,
+                }
+            )
+
+    comparison = pd.DataFrame(rows)
+    window_order = {label: index for index, label in enumerate(windows)}
+    comparison["_window_order"] = comparison["window"].map(window_order)
+    return comparison.sort_values(["peer_order", "ticker", "_window_order"]).drop(columns="_window_order").reset_index(drop=True)
+
+
+def build_peer_return_summary_stats(
+    peer_return_comparison: pd.DataFrame,
+    *,
+    focus_window: str = "1y",
+) -> dict[str, Any]:
+    """Summarize peer-relative return context for one ticker."""
+
+    if peer_return_comparison.empty:
+        return {
+            "peer_count": 0,
+            "available_peer_count": 0,
+            "focus_window": focus_window,
+            "median_peer_return": None,
+            "median_excess_return": None,
+            "best_peer_ticker": None,
+            "worst_peer_ticker": None,
+        }
+
+    filtered = peer_return_comparison.loc[
+        (peer_return_comparison["window"] == focus_window)
+        & (~peer_return_comparison["is_focal_company"].astype("boolean").fillna(False))
+    ].copy()
+    return {
+        "peer_count": int(len(filtered)),
+        "available_peer_count": int(filtered["peer_return"].notna().sum()),
+        "focus_window": focus_window,
+        "median_peer_return": filtered["peer_return"].dropna().median(),
+        "median_excess_return": filtered["excess_return"].dropna().median(),
+        "best_peer_ticker": (
+            filtered.sort_values("peer_return", ascending=False).iloc[0]["ticker"]
+            if not filtered["peer_return"].dropna().empty
+            else None
+        ),
+        "worst_peer_ticker": (
+            filtered.sort_values("peer_return", ascending=True).iloc[0]["ticker"]
+            if not filtered["peer_return"].dropna().empty
+            else None
+        ),
+    }
+
+
+def build_peer_summary_stats(peer_valuation: pd.DataFrame) -> dict[str, Any]:
+    """Summarize peer valuation coverage and medians for one peer panel."""
+
+    if peer_valuation.empty:
+        return {
+            "peer_count": 0,
+            "available_peer_count": 0,
+            "median_forward_pe": None,
+            "median_ev_to_ebitda": None,
+            "median_price_to_sales": None,
+            "median_free_cash_flow_yield": None,
+        }
+
+    peer_mask = peer_valuation["is_focal_company"].astype("boolean").fillna(False)
+    peers = peer_valuation.loc[~peer_mask].copy()
+    return {
+        "peer_count": int(len(peers)),
+        "available_peer_count": int(peers["ticker"].notna().sum()),
+        "median_forward_pe": peers["forward_pe"].dropna().median() if "forward_pe" in peers.columns else None,
+        "median_ev_to_ebitda": peers["ev_to_ebitda"].dropna().median() if "ev_to_ebitda" in peers.columns else None,
+        "median_price_to_sales": peers["price_to_sales"].dropna().median() if "price_to_sales" in peers.columns else None,
+        "median_free_cash_flow_yield": (
+            peers["free_cash_flow_yield"].dropna().median()
+            if "free_cash_flow_yield" in peers.columns
+            else None
+        ),
+    }
