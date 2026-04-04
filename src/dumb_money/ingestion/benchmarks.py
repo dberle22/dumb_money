@@ -41,6 +41,89 @@ DEFAULT_BENCHMARK_METADATA: dict[str, dict[str, str]] = {
     },
 }
 
+BENCHMARK_HOLDINGS_MAPPING_COLUMNS = ["ticker", "name", "benchmark", "sector", "industry"]
+
+
+def _clean_mapping_value(value: Any) -> str | None:
+    if pd.isna(value):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _default_scope_from_mapping_row(row: Mapping[str, Any]) -> str | None:
+    benchmark = _clean_mapping_value(row.get("benchmark"))
+    sector = _clean_mapping_value(row.get("sector"))
+    industry = _clean_mapping_value(row.get("industry"))
+
+    if benchmark:
+        mapping = {
+            "s&p 500": "us_large_cap",
+            "dow jones industrial average": "us_large_cap_blue_chip",
+            "russell 2000": "us_small_cap",
+            "nasdaq 100": "us_large_cap_growth",
+        }
+        label = benchmark.lower()
+        return mapping.get(label, label.replace(" ", "_"))
+    if sector:
+        return sector.lower().replace(" ", "_")
+    if industry:
+        return industry.lower().replace(" ", "_")
+    return None
+
+
+def _default_category_from_mapping_row(row: Mapping[str, Any]) -> str:
+    if _clean_mapping_value(row.get("benchmark")):
+        return BenchmarkCategory.MARKET.value
+    if _clean_mapping_value(row.get("sector")):
+        return BenchmarkCategory.SECTOR.value
+    if _clean_mapping_value(row.get("industry")):
+        return BenchmarkCategory.INDUSTRY.value
+    return BenchmarkCategory.CUSTOM.value
+
+
+def _load_benchmark_mapping_definitions(settings: AppSettings) -> list[dict[str, Any]]:
+    mapping_path = settings.raw_benchmark_holdings_dir / "etf_benchmark_mapping.csv"
+    if not mapping_path.exists():
+        return []
+
+    mapping = pd.read_csv(mapping_path)
+    missing = [column for column in BENCHMARK_HOLDINGS_MAPPING_COLUMNS if column not in mapping.columns]
+    if missing:
+        raise ValueError(f"benchmark holdings mapping is missing required columns: {missing}")
+
+    definitions: list[dict[str, Any]] = []
+    for row in mapping[BENCHMARK_HOLDINGS_MAPPING_COLUMNS].to_dict(orient="records"):
+        ticker = str(row["ticker"]).strip().upper()
+        if not ticker:
+            continue
+        definitions.append(
+            {
+                "benchmark_id": ticker,
+                "ticker": ticker,
+                "name": _clean_mapping_value(row["name"]) or ticker,
+                "category": _default_category_from_mapping_row(row),
+                "scope": _default_scope_from_mapping_row(row),
+                "currency": "USD",
+                "description": (
+                    _clean_mapping_value(row.get("benchmark"))
+                    or _clean_mapping_value(row.get("sector"))
+                    or _clean_mapping_value(row.get("industry"))
+                ),
+            }
+        )
+
+    return definitions
+
+
+def default_benchmark_price_definitions(settings: AppSettings | None = None) -> list[BenchmarkDefinition]:
+    """Return the maintained benchmark ETF universe used for price ingestion defaults."""
+
+    settings = settings or get_settings()
+    return normalize_benchmark_definitions(
+        [*_load_benchmark_mapping_definitions(settings), *settings.default_benchmarks]
+    )
+
 
 def build_benchmark_definitions_filename(label: str, as_of_date: date | str) -> str:
     clean_date = str(as_of_date).replace("-", "")
@@ -168,7 +251,7 @@ def ingest_benchmark_prices(
     elif tickers is not None:
         resolved_inputs = normalize_tickers(tickers)
     else:
-        resolved_inputs = settings.default_benchmarks
+        resolved_inputs = default_benchmark_price_definitions(settings)
 
     definitions_frame = benchmark_definitions_to_frame(resolved_inputs)
     benchmark_tickers = definitions_frame["ticker"].tolist() if not definitions_frame.empty else []

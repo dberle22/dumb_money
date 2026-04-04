@@ -14,14 +14,7 @@ from dumb_money.storage import export_table_csv, upsert_canonical_table, write_c
 NUMERIC_PRICE_COLUMNS = ["open", "high", "low", "close", "adj_close", "volume"]
 
 
-def _resolve_price_input_paths(
-    input_paths: Sequence[str | Path] | None,
-    *,
-    settings: AppSettings,
-) -> list[Path]:
-    if input_paths:
-        return [Path(path) for path in input_paths]
-
+def _resolve_raw_price_input_paths(*, settings: AppSettings) -> list[Path]:
     individual_paths = sorted(
         path
         for path in settings.raw_prices_dir.glob("*.csv")
@@ -31,6 +24,32 @@ def _resolve_price_input_paths(
         return individual_paths
 
     return sorted(settings.raw_prices_dir.glob("combined_prices_*.csv"))
+
+
+def _resolve_raw_benchmark_price_input_paths(*, settings: AppSettings) -> list[Path]:
+    individual_paths = sorted(
+        path
+        for path in settings.raw_benchmarks_dir.glob("*.csv")
+        if "_benchmark_prices_" not in path.name and "benchmark_definitions" not in path.name
+    )
+    combined_paths = sorted(settings.raw_benchmarks_dir.glob("*_benchmark_prices_*.csv"))
+    return list(dict.fromkeys([*individual_paths, *combined_paths]))
+
+
+def _resolve_price_input_paths(
+    input_paths: Sequence[str | Path] | None,
+    *,
+    settings: AppSettings,
+) -> list[Path]:
+    if input_paths:
+        return [Path(path) for path in input_paths]
+
+    paths = _resolve_raw_price_input_paths(settings=settings)
+
+    # Benchmark ETF price extracts live under the raw benchmark directory, but they
+    # still need to land in the same canonical normalized_prices table as equities.
+    benchmark_paths = _resolve_raw_benchmark_price_input_paths(settings=settings)
+    return list(dict.fromkeys([*paths, *benchmark_paths]))
 
 
 def normalize_prices_frame(frame: pd.DataFrame) -> pd.DataFrame:

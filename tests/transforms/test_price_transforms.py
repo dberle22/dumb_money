@@ -127,3 +127,55 @@ def test_stage_prices_prefers_individual_raw_files_over_combined_snapshots(tmp_p
     frame = stage_prices(settings=settings)
 
     assert frame["ticker"].tolist() == ["MSFT"]
+
+
+def test_stage_prices_includes_raw_benchmark_price_files_by_default(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    settings.raw_benchmarks_dir.mkdir(parents=True, exist_ok=True)
+
+    pd.DataFrame(
+        {
+            "ticker": ["XLK"],
+            "date": ["2024-01-03"],
+            "interval": ["1d"],
+            "source": ["yfinance"],
+            "currency": ["USD"],
+            "open": [20.0],
+            "high": [21.0],
+            "low": [19.0],
+            "close": [20.5],
+            "adj_close": [20.4],
+            "volume": [200],
+        }
+    ).to_csv(settings.raw_benchmarks_dir / "xlk_20240101_20240103_1d.csv", index=False)
+    pd.DataFrame(
+        {
+            "ticker": ["XSD"],
+            "date": ["2024-01-04"],
+            "interval": ["1d"],
+            "source": ["yfinance"],
+            "currency": ["USD"],
+            "open": [30.0],
+            "high": [31.0],
+            "low": [29.0],
+            "close": [30.5],
+            "adj_close": [30.4],
+            "volume": [300],
+        }
+    ).to_csv(settings.raw_benchmarks_dir / "sample_universe_benchmark_prices_20240101_20240104_1d.csv", index=False)
+    pd.DataFrame(
+        {
+            "benchmark_id": ["XLK"],
+            "ticker": ["XLK"],
+            "name": ["Technology Select Sector SPDR Fund"],
+            "category": ["sector"],
+            "scope": ["technology"],
+            "currency": ["USD"],
+            "inception_date": [None],
+            "description": ["Technology"],
+        }
+    ).to_csv(settings.raw_benchmarks_dir / "sample_universe_benchmark_definitions_20240104.csv", index=False)
+
+    frame = stage_prices(settings=settings)
+
+    assert sorted(frame["ticker"].unique().tolist()) == ["XLK", "XSD"]

@@ -5,6 +5,9 @@ from dumb_money.outputs.company_report import (
     build_benchmark_comparison_table,
     build_company_overview_table,
     build_final_research_summary_text,
+    build_peer_return_comparison_table,
+    build_peer_valuation_table,
+    build_sector_snapshot_table,
     build_research_summary_table,
     build_research_summary_text,
     build_return_windows_table,
@@ -25,12 +28,25 @@ from dumb_money.outputs.company_report import (
     render_scorecard_metric_chart,
     render_trailing_return_comparison_chart,
 )
+from dumb_money.outputs.market_performance_section import (
+    MarketPerformanceSectionData,
+    build_market_performance_section_data,
+    build_market_performance_table,
+    render_market_performance_section,
+    save_market_performance_section,
+)
 
 __all__ = [
     "build_balance_sheet_scorecard_table",
     "build_benchmark_comparison_table",
     "build_company_overview_table",
     "build_final_research_summary_text",
+    "MarketPerformanceSectionData",
+    "build_market_performance_section_data",
+    "build_market_performance_table",
+    "build_peer_return_comparison_table",
+    "build_peer_valuation_table",
+    "build_sector_snapshot_table",
     "build_research_summary_table",
     "build_research_summary_text",
     "build_return_windows_table",
@@ -45,9 +61,11 @@ __all__ = [
     "render_drawdown_chart",
     "render_indexed_price_performance_chart",
     "render_price_with_moving_averages_chart",
+    "render_market_performance_section",
     "render_score_decomposition_chart",
     "render_score_summary_strip",
     "render_scorecard_category_chart",
     "render_scorecard_metric_chart",
     "render_trailing_return_comparison_chart",
+    "save_market_performance_section",
 ]

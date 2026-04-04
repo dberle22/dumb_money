@@ -11,6 +11,10 @@ import pandas as pd
 from dumb_money.analytics.company import (
     build_benchmark_comparison,
     build_fundamentals_summary,
+    build_peer_return_comparison,
+    build_peer_return_summary_stats,
+    build_peer_summary_stats,
+    build_peer_valuation_comparison,
     build_trailing_return_comparison,
     calculate_return_windows,
     calculate_risk_metrics,
@@ -23,7 +27,7 @@ from dumb_money.analytics.scorecard import (
 )
 from dumb_money.config import AppSettings, get_settings
 from dumb_money.storage import read_canonical_table
-from dumb_money.transforms.prices import normalize_prices_frame
+from dumb_money.transforms.sector_snapshots import build_sector_snapshots_frame
 
 
 @dataclass(slots=True)
@@ -41,6 +45,11 @@ class CompanyResearchPacket:
     trend_metrics: dict[str, float | bool | None]
     benchmark_comparison: pd.DataFrame
     fundamentals_summary: dict[str, Any]
+    peer_return_comparison: pd.DataFrame
+    peer_return_summary_stats: dict[str, Any]
+    peer_valuation_comparison: pd.DataFrame
+    peer_summary_stats: dict[str, Any]
+    sector_snapshot: dict[str, Any]
     scorecard: CompanyScorecard
 
 
@@ -81,18 +90,9 @@ def load_benchmark_set(*, settings: AppSettings | None = None, set_id: str | Non
 
 
 def load_benchmark_prices(*, settings: AppSettings | None = None) -> pd.DataFrame:
-    settings = settings or get_settings()
-    combined_paths = sorted(settings.raw_benchmarks_dir.glob("*_benchmark_prices_*.csv"))
-    if combined_paths:
-        frames = [pd.read_csv(path) for path in combined_paths]
-        return normalize_prices_frame(pd.concat(frames, ignore_index=True))
-
-    individual_paths = sorted(settings.raw_benchmarks_dir.glob("*.csv"))
-    price_paths = [path for path in individual_paths if "benchmark_definitions" not in path.name]
-    if not price_paths:
-        return pd.DataFrame()
-    frames = [pd.read_csv(path) for path in price_paths]
-    return normalize_prices_frame(pd.concat(frames, ignore_index=True))
+    # Benchmark ETF histories are expected to be canonicalized into DuckDB through
+    # the shared price staging flow, not loaded ad hoc from raw benchmark CSVs.
+    return load_staged_prices(settings=settings)
 
 
 def load_security_master(*, settings: AppSettings | None = None) -> pd.DataFrame:
@@ -103,6 +103,16 @@ def load_security_master(*, settings: AppSettings | None = None) -> pd.DataFrame
 def load_benchmark_mappings(*, settings: AppSettings | None = None) -> pd.DataFrame:
     settings = settings or get_settings()
     return read_canonical_table("benchmark_mappings", settings=settings)
+
+
+def load_peer_sets(*, settings: AppSettings | None = None) -> pd.DataFrame:
+    settings = settings or get_settings()
+    return read_canonical_table("peer_sets", settings=settings)
+
+
+def load_sector_snapshots(*, settings: AppSettings | None = None) -> pd.DataFrame:
+    settings = settings or get_settings()
+    return read_canonical_table("sector_snapshots", settings=settings)
 
 
 def build_company_research_packet(
@@ -142,6 +152,15 @@ def build_company_research_packet(
     trailing_return_comparison = build_trailing_return_comparison(company_history, benchmark_histories)
     security_master = load_security_master(settings=settings)
     benchmark_mappings = load_benchmark_mappings(settings=settings)
+    peer_sets = load_peer_sets(settings=settings)
+    sector_snapshots = load_sector_snapshots(settings=settings)
+    if sector_snapshots.empty:
+        sector_snapshots = build_sector_snapshots_frame(
+            security_master,
+            fundamentals,
+            prices,
+            benchmark_mappings,
+        )
     security_rows = (
         security_master.loc[security_master["ticker"] == normalized_ticker].copy()
         if "ticker" in security_master.columns
@@ -160,6 +179,23 @@ def build_company_research_packet(
         if not return_windows.empty and not end_dates.empty
         else fundamentals_summary.get("as_of_date")
     )
+    peer_rows = (
+        peer_sets.loc[peer_sets["ticker"] == normalized_ticker].copy()
+        if "ticker" in peer_sets.columns
+        else pd.DataFrame()
+    )
+    peer_valuation_comparison = build_peer_valuation_comparison(
+        normalized_ticker,
+        peer_rows,
+        fundamentals,
+    )
+    peer_return_comparison = build_peer_return_comparison(
+        normalized_ticker,
+        peer_rows,
+        prices,
+    )
+    peer_return_summary_stats = build_peer_return_summary_stats(peer_return_comparison)
+    peer_summary_stats = build_peer_summary_stats(peer_valuation_comparison)
     scorecard = build_company_scorecard(
         ticker=normalized_ticker,
         company_name=fundamentals_summary.get("long_name"),
@@ -170,6 +206,7 @@ def build_company_research_packet(
         risk_metrics=risk_metrics,
         trend_metrics=trend_metrics,
         fundamentals_summary=fundamentals_summary,
+        peer_valuation_comparison=peer_valuation_comparison,
         primary_benchmark=benchmark_mapping_row.get("primary_benchmark"),
         secondary_benchmark=(
             benchmark_mapping_row.get("sector_benchmark")
@@ -178,6 +215,13 @@ def build_company_research_packet(
             or benchmark_mapping_row.get("custom_benchmark")
         ),
     )
+    company_sector = fundamentals_summary.get("sector") or security_row.get("sector")
+    sector_snapshot_rows = (
+        sector_snapshots.loc[sector_snapshots["sector"] == company_sector].copy()
+        if company_sector and "sector" in sector_snapshots.columns
+        else pd.DataFrame()
+    )
+    sector_snapshot = sector_snapshot_rows.iloc[-1].to_dict() if not sector_snapshot_rows.empty else {}
 
     return CompanyResearchPacket(
         ticker=normalized_ticker,
@@ -191,5 +235,10 @@ def build_company_research_packet(
         trend_metrics=trend_metrics,
         benchmark_comparison=benchmark_comparison,
         fundamentals_summary=fundamentals_summary,
+        peer_return_comparison=peer_return_comparison,
+        peer_return_summary_stats=peer_return_summary_stats,
+        peer_valuation_comparison=peer_valuation_comparison,
+        peer_summary_stats=peer_summary_stats,
+        sector_snapshot=sector_snapshot,
         scorecard=scorecard,
     )

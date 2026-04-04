@@ -24,6 +24,8 @@ def test_build_company_research_packet_from_shared_datasets(tmp_path) -> None:
             prices,
             prices.assign(ticker="SPY", adj_close=prices["adj_close"] * 0.98, close=prices["close"] * 0.98),
             prices.assign(ticker="QQQ", adj_close=prices["adj_close"] * 1.01, close=prices["close"] * 1.01),
+            prices.assign(ticker="MSFT", adj_close=prices["adj_close"] * 1.03, close=prices["close"] * 1.03),
+            prices.assign(ticker="DELL", adj_close=prices["adj_close"] * 0.95, close=prices["close"] * 0.95),
         ],
         ignore_index=True,
     )
@@ -33,12 +35,6 @@ def test_build_company_research_packet_from_shared_datasets(tmp_path) -> None:
         ],
         "normalized_prices",
         settings=settings,
-    )
-
-    benchmark_prices = prices.loc[prices["ticker"].isin(["SPY", "QQQ"])].copy()
-    benchmark_prices.to_csv(
-        settings.raw_benchmarks_dir / "sample_universe_benchmark_prices_20240102_20240103_1d.csv",
-        index=False,
     )
 
     fundamentals = pd.read_csv("tests/fixtures/fundamentals/aapl_fundamentals_flat_2024-06-30.csv")
@@ -77,6 +73,38 @@ def test_build_company_research_packet_from_shared_datasets(tmp_path) -> None:
         }
     )
     write_canonical_table(benchmark_mappings, "benchmark_mappings", settings=settings)
+    peer_sets = pd.DataFrame(
+        {
+            "peer_set_id": ["peer_set::AAPL", "peer_set::AAPL"],
+            "ticker": ["AAPL", "AAPL"],
+            "peer_ticker": ["MSFT", "DELL"],
+            "relationship_type": ["sector", "sector"],
+            "sector": ["Technology", "Technology"],
+            "industry": ["Consumer Electronics", "Consumer Electronics"],
+            "selection_method": ["sector_market_cap_proximity", "sector_market_cap_proximity"],
+            "peer_order": [1, 2],
+        }
+    )
+    write_canonical_table(peer_sets, "peer_sets", settings=settings)
+    sector_snapshots = pd.DataFrame(
+        {
+            "sector": ["Technology"],
+            "sector_benchmark": ["XLK"],
+            "company_count": [3],
+            "companies_with_fundamentals": [3],
+            "companies_with_prices": [3],
+            "median_market_cap": [2200.0],
+            "median_forward_pe": [22.0],
+            "median_ev_to_ebitda": [16.0],
+            "median_price_to_sales": [5.0],
+            "median_free_cash_flow_yield": [0.03],
+            "median_operating_margin": [0.25],
+            "median_gross_margin": [0.48],
+            "median_return_6m": [0.12],
+            "median_return_1y": [0.30],
+        }
+    )
+    write_canonical_table(sector_snapshots, "sector_snapshots", settings=settings)
 
     security_master = pd.DataFrame(
         [
@@ -96,6 +124,44 @@ def test_build_company_research_packet_from_shared_datasets(tmp_path) -> None:
                 is_eligible_research_universe=True,
                 source="test",
                 source_id="AAPL",
+                first_seen_at="2026-03-31",
+                last_updated_at="2026-03-31",
+            ).model_dump(mode="json"),
+            Security(
+                security_id="sec_msft",
+                ticker="MSFT",
+                name="Microsoft Corp.",
+                asset_type="common_stock",
+                exchange="Nasdaq",
+                primary_listing="Nasdaq Global Select Market",
+                currency="USD",
+                sector="Technology",
+                industry="Software",
+                country=None,
+                is_benchmark=False,
+                is_active=True,
+                is_eligible_research_universe=True,
+                source="test",
+                source_id="MSFT",
+                first_seen_at="2026-03-31",
+                last_updated_at="2026-03-31",
+            ).model_dump(mode="json"),
+            Security(
+                security_id="sec_dell",
+                ticker="DELL",
+                name="Dell Technologies",
+                asset_type="common_stock",
+                exchange="NYSE",
+                primary_listing="NYSE",
+                currency="USD",
+                sector="Technology",
+                industry="Computer Hardware",
+                country=None,
+                is_benchmark=False,
+                is_active=True,
+                is_eligible_research_universe=True,
+                source="test",
+                source_id="DELL",
                 first_seen_at="2026-03-31",
                 last_updated_at="2026-03-31",
             ).model_dump(mode="json"),
@@ -148,6 +214,11 @@ def test_build_company_research_packet_from_shared_datasets(tmp_path) -> None:
     assert "net_cash" in packet.fundamentals_summary
     assert packet.scorecard.summary["primary_benchmark"] == "QQQ"
     assert packet.scorecard.summary["secondary_benchmark"] == "SPY"
+    assert packet.peer_summary_stats["peer_count"] == 2
+    assert packet.peer_return_summary_stats["peer_count"] == 2
+    assert packet.peer_return_comparison["window"].tolist()[:4] == ["1m", "3m", "6m", "1y"]
+    assert packet.peer_valuation_comparison["ticker"].tolist()[0] == "AAPL"
+    assert packet.sector_snapshot["sector_benchmark"] == "XLK"
     assert packet.scorecard.summary["total_score"] >= 0
 
 
