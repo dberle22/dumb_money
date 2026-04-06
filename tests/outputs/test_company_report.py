@@ -3,6 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
+
 from dumb_money.outputs import (
     build_balance_sheet_scorecard_table,
     build_company_overview_table,
@@ -49,15 +53,21 @@ def test_company_report_tables_and_charts_build_from_aapl_packet() -> None:
     assert overview["label"].tolist()[:3] == ["Ticker", "Company", "Sector"]
     assert research_summary["label"].tolist()[:2] == ["Company", "Ticker"]
     assert trailing_returns["Window"].tolist() == ["1m", "3m", "6m", "1y"]
-    assert "Excess Return" in peer_returns.columns
+    assert "Excess vs Company" in peer_returns.columns
     assert "Current Drawdown" in risk_table["label"].tolist()
     assert "Sector Benchmark" in sector_snapshot["label"].tolist()
     assert "Interpretation" in balance_sheet.columns
     assert "Interpretation" in valuation.columns
+    assert "Peer Median" in valuation.columns
     assert "Role" in peer_valuation.columns
     assert "Metric" in metrics.columns
     assert "screens as" in summary_text.lower()
     assert packet.ticker in final_text
+    assert packet.scorecard.summary["secondary_benchmark"] == "XLK"
+    assert (
+        packet.scorecard.metrics.set_index("metric_id").loc["return_vs_secondary_1y", "metric_available"]
+        is True
+    )
 
     for figure in [
         render_score_summary_strip(packet),

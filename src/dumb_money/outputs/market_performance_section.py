@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from dumb_money import _matplotlib  # noqa: F401
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import pandas as pd

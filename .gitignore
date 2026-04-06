@@ -40,6 +40,7 @@ data/runs/basket_ingestion/
 data/staging/
 data/marts/
 data/warehouse/dumb_money.duckdb
+data/reference/curated_peer_sets.csv
 data/reference/security_master_overrides.csv
 
 # Imported legacy repo content

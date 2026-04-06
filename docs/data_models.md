@@ -518,6 +518,7 @@ Suggested columns:
 - `peer_set_id`
 - `ticker`
 - `peer_ticker`
+- `peer_source`
 - `relationship_type`
 - `sector`
 - `industry`
@@ -527,3 +528,4 @@ Suggested columns:
 Purpose:
 
 - supports peer-relative valuation, positioning tables, and percentile scoring
+- distinguishes automatically generated peer memberships from curated research peer lists using values such as `automatic` and `curated`

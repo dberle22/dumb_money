@@ -28,6 +28,7 @@ from dumb_money.transforms import (
     stage_benchmark_memberships,
     stage_benchmark_sets,
     stage_fundamentals,
+    stage_peer_sets,
     stage_security_ingestion_status,
     stage_listed_security_seed,
     stage_prices,
@@ -132,6 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
             "benchmark-membership-coverage",
             "benchmark-mappings",
             "benchmark-sets",
+            "peer-sets",
             "security-master",
             "security-ingestion-status",
             "all",
@@ -310,6 +312,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 input_paths=args.benchmark_definition_paths,
                 set_id=args.set_id,
             )
+        if args.target in {"peer-sets", "all"}:
+            stage_peer_sets()
         if args.target in {"security-master", "all"}:
             stage_security_master(
                 listed_security_paths=None,

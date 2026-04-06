@@ -43,6 +43,11 @@ def test_stage_all_command_dispatches_transform_builds(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         cli_main_module,
+        "stage_peer_sets",
+        lambda **kwargs: calls.append(("peer_sets", kwargs)),
+    )
+    monkeypatch.setattr(
+        cli_main_module,
         "stage_listed_security_seed",
         lambda **kwargs: calls.append(("listed_security_seed", kwargs)),
     )
@@ -114,6 +119,7 @@ def test_stage_all_command_dispatches_transform_builds(monkeypatch) -> None:
             },
         ),
         ("benchmark_sets", {"input_paths": ["benchmark_defs.csv"], "set_id": "core_us"}),
+        ("peer_sets", {}),
         (
             "security_master",
             {

@@ -28,7 +28,7 @@ from dumb_money.transforms.ingestion_status import (
     build_security_ingestion_status_frame,
     stage_security_ingestion_status,
 )
-from dumb_money.transforms.peer_sets import build_peer_sets_frame, stage_peer_sets
+from dumb_money.transforms.peer_sets import build_peer_sets_frame, normalize_curated_peer_sets, stage_peer_sets
 from dumb_money.transforms.prices import normalize_prices_frame, stage_prices
 from dumb_money.transforms.sector_snapshots import build_sector_snapshots_frame, stage_sector_snapshots
 from dumb_money.transforms.security_universe import (
@@ -52,6 +52,7 @@ __all__ = [
     "build_benchmark_memberships_frame",
     "build_benchmark_sets_frame",
     "build_peer_sets_frame",
+    "normalize_curated_peer_sets",
     "build_sector_snapshots_frame",
     "build_security_master_frame",
     "build_security_ingestion_status_frame",

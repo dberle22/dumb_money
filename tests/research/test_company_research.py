@@ -78,6 +78,7 @@ def test_build_company_research_packet_from_shared_datasets(tmp_path) -> None:
             "peer_set_id": ["peer_set::AAPL", "peer_set::AAPL"],
             "ticker": ["AAPL", "AAPL"],
             "peer_ticker": ["MSFT", "DELL"],
+            "peer_source": ["automatic", "curated"],
             "relationship_type": ["sector", "sector"],
             "sector": ["Technology", "Technology"],
             "industry": ["Consumer Electronics", "Consumer Electronics"],

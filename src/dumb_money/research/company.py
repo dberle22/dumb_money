@@ -145,11 +145,6 @@ def build_company_research_packet(
         for benchmark_ticker, history in benchmark_histories.items()
         if not history.empty
     }
-    return_windows = calculate_return_windows(company_history)
-    risk_metrics = calculate_risk_metrics(company_history)
-    trend_metrics = calculate_trend_metrics(company_history)
-    benchmark_comparison = build_benchmark_comparison(company_history, benchmark_histories)
-    trailing_return_comparison = build_trailing_return_comparison(company_history, benchmark_histories)
     security_master = load_security_master(settings=settings)
     benchmark_mappings = load_benchmark_mappings(settings=settings)
     peer_sets = load_peer_sets(settings=settings)
@@ -173,6 +168,16 @@ def build_company_research_packet(
     )
     security_row = security_rows.iloc[-1].to_dict() if not security_rows.empty else {}
     benchmark_mapping_row = benchmark_mapping_rows.iloc[-1].to_dict() if not benchmark_mapping_rows.empty else {}
+    resolved_primary_benchmark = benchmark_mapping_row.get("primary_benchmark")
+    if not resolved_primary_benchmark and benchmark_histories:
+        resolved_primary_benchmark = next(iter(benchmark_histories))
+    primary_benchmark_history = benchmark_histories.get(resolved_primary_benchmark) if resolved_primary_benchmark else None
+
+    return_windows = calculate_return_windows(company_history)
+    risk_metrics = calculate_risk_metrics(company_history, benchmark_history=primary_benchmark_history)
+    trend_metrics = calculate_trend_metrics(company_history)
+    benchmark_comparison = build_benchmark_comparison(company_history, benchmark_histories)
+    trailing_return_comparison = build_trailing_return_comparison(company_history, benchmark_histories)
     end_dates = return_windows["end_date"].dropna() if "end_date" in return_windows.columns else pd.Series(dtype=object)
     score_date = (
         str(pd.to_datetime(end_dates.iloc[-1]).date())
@@ -207,7 +212,7 @@ def build_company_research_packet(
         trend_metrics=trend_metrics,
         fundamentals_summary=fundamentals_summary,
         peer_valuation_comparison=peer_valuation_comparison,
-        primary_benchmark=benchmark_mapping_row.get("primary_benchmark"),
+        primary_benchmark=resolved_primary_benchmark,
         secondary_benchmark=(
             benchmark_mapping_row.get("sector_benchmark")
             or benchmark_mapping_row.get("style_benchmark")

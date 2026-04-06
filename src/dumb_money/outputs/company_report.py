@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from dumb_money import _matplotlib  # noqa: F401
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.axes import Axes
@@ -15,6 +16,34 @@ from dumb_money.analytics.company import (
     build_moving_average_series,
 )
 from dumb_money.analytics.scorecard import CATEGORY_TARGET_WEIGHTS
+from dumb_money.outputs.balance_sheet_strength_section import (
+    build_balance_sheet_strength_section_data_from_packet,
+    build_balance_sheet_strength_table as build_section_balance_sheet_strength_table,
+)
+from dumb_money.outputs.final_research_summary_section import (
+    build_final_research_summary_section_data_from_packet,
+    build_final_research_summary_text_from_data,
+)
+from dumb_money.outputs.peer_positioning_section import (
+    build_peer_positioning_return_table as build_section_peer_positioning_return_table,
+    build_peer_positioning_section_data_from_packet,
+    build_peer_positioning_valuation_table as build_section_peer_positioning_valuation_table,
+)
+from dumb_money.outputs.research_summary_section import (
+    build_research_summary_section_data_from_packet,
+    build_research_summary_strip_table as build_section_research_summary_strip_table,
+    build_research_summary_table as build_section_research_summary_table,
+    build_research_summary_text_from_data,
+    render_research_summary_section,
+)
+from dumb_money.outputs.trend_risk_profile_section import (
+    build_trend_risk_profile_section_data_from_packet,
+    build_trend_risk_profile_table as build_section_trend_risk_profile_table,
+)
+from dumb_money.outputs.valuation_section import (
+    build_valuation_section_data_from_packet,
+    build_valuation_summary_table as build_section_valuation_summary_table,
+)
 from dumb_money.research.company import CompanyResearchPacket
 
 REPORT_COLUMNS = [
@@ -203,57 +232,15 @@ def build_scorecard_summary_table(packet: CompanyResearchPacket) -> pd.DataFrame
 def build_research_summary_table(packet: CompanyResearchPacket) -> pd.DataFrame:
     """Build a memo-style research summary table."""
 
-    summary = packet.scorecard.summary
-    category_frame = _category_score_frame(packet)
-    strongest = category_frame.sort_values("score_pct", ascending=False).iloc[0]
-    weakest = category_frame.sort_values("score_pct", ascending=True).iloc[0]
-    strengths, constraints = _build_strength_constraint_lists(packet)
-
-    rows = [
-        ("Company", packet.company_name or packet.ticker),
-        ("Ticker", packet.ticker),
-        ("Research View", build_research_summary_text(packet, short=True)),
-        ("Score", f"{summary['total_score']:.1f} / 100"),
-        ("Best Supported Pillar", f"{strongest['category']} ({strongest['score_display']})"),
-        ("Main Watch Item", f"{weakest['category']} ({weakest['score_display']})"),
-        ("Strengths", "; ".join(strengths) if strengths else "N/A"),
-        ("Constraints", "; ".join(constraints) if constraints else "N/A"),
-    ]
-    return pd.DataFrame(rows, columns=REPORT_COLUMNS)
+    section_data = build_research_summary_section_data_from_packet(packet)
+    return build_section_research_summary_table(section_data)
 
 
 def build_score_summary_strip_table(packet: CompanyResearchPacket) -> pd.DataFrame:
     """Build a compact score strip table for total and category summaries."""
 
-    summary = packet.scorecard.summary
-    strip_rows = [
-        {
-            "pillar": "Total Score",
-            "score": summary["total_score"],
-            "max_score": 100.0,
-            "score_pct": summary["total_score"] / 100.0,
-            "assessment": _flag_from_normalized_value(summary["total_score"] / 100.0),
-        }
-    ]
-
-    category_frame = _category_score_frame(packet)
-    for row in category_frame.itertuples():
-        strip_rows.append(
-            {
-                "pillar": row.category,
-                "score": row.category_score,
-                "max_score": row.target,
-                "score_pct": row.score_pct,
-                "assessment": row.assessment,
-            }
-        )
-
-    strip = pd.DataFrame(strip_rows)
-    strip["score_display"] = strip.apply(
-        lambda row: f"{row['score']:.1f} / {row['max_score']:.0f}",
-        axis=1,
-    )
-    return strip[["pillar", "score_display", "assessment"]]
+    section_data = build_research_summary_section_data_from_packet(packet)
+    return build_section_research_summary_strip_table(section_data)
 
 
 def build_benchmark_comparison_table(packet: CompanyResearchPacket) -> pd.DataFrame:
@@ -368,145 +355,38 @@ def build_trailing_return_comparison_table(packet: CompanyResearchPacket) -> pd.
 def build_risk_metric_table(packet: CompanyResearchPacket) -> pd.DataFrame:
     """Build a compact risk and trend panel."""
 
-    rows = [
-        ("1M Volatility", _format_percent(packet.risk_metrics.get("annualized_volatility_1m"))),
-        ("3M Volatility", _format_percent(packet.risk_metrics.get("annualized_volatility_3m"))),
-        ("1Y Volatility", _format_percent(packet.risk_metrics.get("annualized_volatility_1y"))),
-        ("Current Drawdown", _format_percent(packet.risk_metrics.get("current_drawdown"))),
-        ("Max Drawdown (1Y)", _format_percent(packet.risk_metrics.get("max_drawdown_1y"))),
-        ("Price vs 50D MA", _format_percent(packet.trend_metrics.get("price_vs_sma_50"))),
-        ("Price vs 200D MA", _format_percent(packet.trend_metrics.get("price_vs_sma_200"))),
-        (
-            "Trend Structure",
-            "50D above 200D" if packet.trend_metrics.get("sma_50_above_sma_200") else "50D below 200D",
-        ),
-    ]
-    return pd.DataFrame(rows, columns=REPORT_COLUMNS)
+    section_data = build_trend_risk_profile_section_data_from_packet(packet)
+    summary_table = build_section_trend_risk_profile_table(section_data)
+    return summary_table[["Metric", "Value"]].rename(columns={"Metric": "label", "Value": "value"})
 
 
 def build_balance_sheet_scorecard_table(packet: CompanyResearchPacket) -> pd.DataFrame:
     """Build a point-in-time balance sheet panel using scorecard metrics."""
 
-    metrics = packet.scorecard.metrics.copy()
-    balance_metrics = metrics.loc[metrics["category"] == "Balance Sheet Strength"].copy()
-    if balance_metrics.empty:
-        return balance_metrics
-
-    balance_metrics["Value"] = balance_metrics.apply(
-        lambda row: _format_metric_raw_value(row["metric_id"], row["raw_value"]),
-        axis=1,
-    )
-    balance_metrics["Score Contribution"] = balance_metrics.apply(
-        lambda row: f"{row['metric_score']:.2f} / {row['metric_weight']:.0f}",
-        axis=1,
-    )
-    balance_metrics["Interpretation"] = balance_metrics["normalized_value"].map(_flag_from_normalized_value)
-    return balance_metrics[
-        ["metric_name", "Value", "Score Contribution", "Interpretation", "notes"]
-    ].rename(
-        columns={
-            "metric_name": "Metric",
-            "notes": "Notes",
-        }
-    )
+    section_data = build_balance_sheet_strength_section_data_from_packet(packet)
+    table = build_section_balance_sheet_strength_table(section_data)
+    return table.rename(columns={"Assessment": "Interpretation"})
 
 
 def build_valuation_summary_table(packet: CompanyResearchPacket) -> pd.DataFrame:
     """Build a current-state valuation table using available scorecard metrics."""
 
-    metrics = packet.scorecard.metrics.copy()
-    valuation_metrics = metrics.loc[metrics["category"] == "Valuation"].copy()
-    if valuation_metrics.empty:
-        return valuation_metrics
-
-    valuation_metrics["Value"] = valuation_metrics.apply(
-        lambda row: _format_metric_raw_value(row["metric_id"], row["raw_value"]),
-        axis=1,
-    )
-    valuation_metrics["Score Contribution"] = valuation_metrics.apply(
-        lambda row: f"{row['metric_score']:.2f} / {row['metric_weight']:.0f}",
-        axis=1,
-    )
-    valuation_metrics["Interpretation"] = valuation_metrics["normalized_value"].map(_flag_from_normalized_value)
-    return valuation_metrics[
-        ["metric_name", "Value", "Score Contribution", "Interpretation", "notes"]
-    ].rename(
-        columns={
-            "metric_name": "Metric",
-            "notes": "Notes",
-        }
-    )
+    section_data = build_valuation_section_data_from_packet(packet)
+    return build_section_valuation_summary_table(section_data).rename(columns={"Assessment": "Interpretation"})
 
 
 def build_peer_valuation_table(packet: CompanyResearchPacket) -> pd.DataFrame:
     """Build a report-friendly peer valuation comparison table."""
 
-    peer_valuation = packet.peer_valuation_comparison.copy()
-    if peer_valuation.empty:
-        return peer_valuation
-
-    display = peer_valuation.copy()
-    display["Role"] = display["is_focal_company"].map(lambda value: "Company" if value else "Peer")
-    display["Forward P/E"] = display["forward_pe"].map(_format_ratio)
-    display["EV/EBITDA"] = display["ev_to_ebitda"].map(_format_ratio)
-    display["Price/Sales"] = display["price_to_sales"].map(_format_ratio)
-    display["FCF Yield"] = display["free_cash_flow_yield"].map(_format_percent)
-    display["Market Cap"] = display["market_cap"].map(_format_billions)
-    return display[
-        [
-            "Role",
-            "ticker",
-            "company_name",
-            "relationship_type",
-            "selection_method",
-            "Market Cap",
-            "Forward P/E",
-            "EV/EBITDA",
-            "Price/Sales",
-            "FCF Yield",
-        ]
-    ].rename(
-        columns={
-            "ticker": "Ticker",
-            "company_name": "Company",
-            "relationship_type": "Relationship",
-            "selection_method": "Selection Method",
-        }
-    )
+    section_data = build_peer_positioning_section_data_from_packet(packet)
+    return build_section_peer_positioning_valuation_table(section_data)
 
 
 def build_peer_return_comparison_table(packet: CompanyResearchPacket) -> pd.DataFrame:
     """Build a report-friendly peer return comparison table."""
 
-    peer_returns = packet.peer_return_comparison.copy()
-    if peer_returns.empty:
-        return peer_returns
-
-    focus_window = packet.peer_return_summary_stats.get("focus_window", "1y")
-    display = peer_returns.loc[peer_returns["window"] == focus_window].copy()
-    display["Role"] = display["is_focal_company"].map(lambda value: "Company" if value else "Peer")
-    display["Company Return"] = display["company_return"].map(_format_percent)
-    display["Peer Return"] = display["peer_return"].map(_format_percent)
-    display["Excess Return"] = display["excess_return"].map(_format_percent)
-    return display[
-        [
-            "Role",
-            "ticker",
-            "relationship_type",
-            "selection_method",
-            "window",
-            "Company Return",
-            "Peer Return",
-            "Excess Return",
-        ]
-    ].rename(
-        columns={
-            "ticker": "Ticker",
-            "relationship_type": "Relationship",
-            "selection_method": "Selection Method",
-            "window": "Window",
-        }
-    )
+    section_data = build_peer_positioning_section_data_from_packet(packet)
+    return build_section_peer_positioning_return_table(section_data)
 
 
 def build_sector_snapshot_table(packet: CompanyResearchPacket) -> pd.DataFrame:
@@ -541,70 +421,28 @@ def build_sector_snapshot_table(packet: CompanyResearchPacket) -> pd.DataFrame:
 def build_research_summary_text(packet: CompanyResearchPacket, *, short: bool = False) -> str:
     """Build a short memo-style interpretation of the current scorecard."""
 
-    summary = packet.scorecard.summary
-    category_frame = _category_score_frame(packet)
-    strongest = category_frame.sort_values("score_pct", ascending=False).iloc[0]["category"]
-    weakest = category_frame.sort_values("score_pct", ascending=True).iloc[0]["category"]
-    strengths, constraints = _build_strength_constraint_lists(packet)
-
-    if summary["total_score"] >= 80:
-        label = "High-quality setup with broad support"
-    elif summary["total_score"] >= 65:
-        label = "Quality-led profile with mixed offsets"
-    elif summary["total_score"] >= 50:
-        label = "Mixed setup with visible tradeoffs"
-    else:
-        label = "Challenged profile that needs more support"
-
-    if short:
-        return label
-
-    strength_text = strengths[0] if strengths else strongest
-    constraint_text = constraints[0] if constraints else weakest
-    return (
-        f"{packet.company_name or packet.ticker} screens as a {label.lower()}. "
-        f"The score is anchored by {strongest.lower()}, with {strength_text.lower()} standing out in the current data. "
-        f"The main drag is {weakest.lower()}, where {constraint_text.lower()} is keeping the memo more cautious."
-    )
+    section_data = build_research_summary_section_data_from_packet(packet)
+    return build_research_summary_text_from_data(section_data, short=short)
 
 
 def build_final_research_summary_text(packet: CompanyResearchPacket) -> str:
     """Build a short closing summary for the notebook memo."""
 
-    summary = packet.scorecard.summary
-    valuation_metric = _lookup_metric(packet, "forward_pe")
-    drawdown_metric = _lookup_metric(packet, "max_drawdown_1y")
-    return (
-        f"{packet.ticker} finishes with a {summary['total_score']:.1f}/100 score. "
-        f"Business quality remains the clearest support, while market leadership and valuation stay only mixed: "
-        f"forward P/E sits at {_format_metric_raw_value('forward_pe', valuation_metric['raw_value'])} "
-        f"and the trailing one-year max drawdown reached {_format_metric_raw_value('max_drawdown_1y', drawdown_metric['raw_value'])}. "
-        "Peer-relative positioning and historical fundamentals trends remain out of scope until those shared data models land."
-    )
+    section_data = build_final_research_summary_section_data_from_packet(packet)
+    return build_final_research_summary_text_from_data(section_data)
 
 
 def render_score_summary_strip(packet: CompanyResearchPacket) -> Figure:
     """Render a compact horizontal score strip for total score and category pillars."""
 
-    strip = build_score_summary_strip_table(packet).copy()
-    score_values = [packet.scorecard.summary["total_score"], *packet.scorecard.category_scores["category_score"].tolist()]
-    max_values = [100.0, *packet.scorecard.category_scores["category"].map(CATEGORY_TARGET_WEIGHTS).tolist()]
-    colors = ["#0f172a", *[CATEGORY_COLORS.get(category, "#1f5aa6") for category in packet.scorecard.category_scores["category"]]]
-
-    fig, ax = plt.subplots(figsize=(8.5, 4.8))
-    y_positions = list(range(len(strip)))
-    ax.barh(y_positions, max_values, color="#e2e8f0", height=0.58)
-    ax.barh(y_positions, score_values, color=colors, height=0.58)
-    ax.set_yticks(y_positions, strip["pillar"])
-    ax.invert_yaxis()
-    ax.set_xlim(0, 100)
-    ax.set_title(f"{packet.ticker} Research Summary Strip")
-    ax.set_xlabel("Points")
-    for y_position, score, score_display in zip(y_positions, score_values, strip["score_display"], strict=False):
-        ax.text(min(score + 1.5, 98), y_position, score_display, va="center", ha="left", fontsize=9)
-    ax.grid(axis="x", linestyle=":", alpha=0.35)
-    fig.tight_layout()
-    return fig
+    section_data = build_research_summary_section_data_from_packet(packet)
+    figure = render_research_summary_section(section_data)
+    if len(figure.axes) > 1:
+        for axis in figure.axes[1:]:
+            axis.remove()
+        figure.set_size_inches(8.5, 4.8)
+        figure.tight_layout()
+    return figure
 
 
 def render_scorecard_category_chart(packet: CompanyResearchPacket) -> Figure:

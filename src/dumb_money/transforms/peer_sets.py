@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from math import inf, log10
+from pathlib import Path
 
 import pandas as pd
 
@@ -12,6 +13,54 @@ from dumb_money.storage import PEER_SET_COLUMNS, export_table_csv, read_canonica
 MIN_INDUSTRY_PEERS = 3
 MAX_PEERS = 8
 ELIGIBLE_ASSET_TYPES = {"common_stock", "adr"}
+AUTOMATIC_PEER_SOURCE = "automatic"
+CURATED_PEER_SOURCE = "curated"
+
+
+def _resolve_curated_peer_path(
+    curated_peer_path: str | Path | None,
+    *,
+    settings: AppSettings,
+) -> Path:
+    if curated_peer_path is not None:
+        return Path(curated_peer_path)
+    return settings.reference_dir / "curated_peer_sets.csv"
+
+
+def normalize_curated_peer_sets(frame: pd.DataFrame) -> pd.DataFrame:
+    """Normalize curated peer memberships into the canonical peer-set schema."""
+
+    if frame.empty:
+        return pd.DataFrame(columns=PEER_SET_COLUMNS)
+
+    curated = frame.copy()
+    required_columns = {
+        "ticker",
+        "peer_ticker",
+        "relationship_type",
+        "sector",
+        "industry",
+        "selection_method",
+        "peer_order",
+    }
+    missing = sorted(required_columns - set(curated.columns))
+    if missing:
+        raise ValueError(f"curated peer sets missing required columns: {missing}")
+
+    curated["ticker"] = curated["ticker"].astype(str).str.strip().str.upper()
+    curated["peer_ticker"] = curated["peer_ticker"].astype(str).str.strip().str.upper()
+    curated["peer_set_id"] = curated.get("peer_set_id", curated["ticker"].map(lambda ticker: f"peer_set::{ticker}"))
+    curated["peer_source"] = CURATED_PEER_SOURCE
+    curated["relationship_type"] = curated["relationship_type"].astype(str).str.strip().str.lower()
+    curated["selection_method"] = curated["selection_method"].astype(str).str.strip()
+    curated["peer_order"] = pd.to_numeric(curated["peer_order"], errors="raise").astype(int)
+
+    for column in ["sector", "industry"]:
+        curated[column] = curated[column].where(curated[column].notna(), None)
+
+    curated = curated.loc[curated["ticker"] != curated["peer_ticker"]].copy()
+    curated = curated.drop_duplicates(subset=["ticker", "peer_ticker", "peer_source"], keep="first")
+    return curated[PEER_SET_COLUMNS].sort_values(["ticker", "peer_order", "peer_ticker"]).reset_index(drop=True)
 
 
 def _latest_market_caps(fundamentals: pd.DataFrame) -> dict[str, float]:
@@ -78,12 +127,18 @@ def build_peer_sets_frame(
     *,
     min_industry_peers: int = MIN_INDUSTRY_PEERS,
     max_peers: int = MAX_PEERS,
+    curated_peer_sets: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Build canonical peer-group memberships for eligible maintained securities."""
 
     eligible = _eligible_securities(security_master)
+    normalized_curated = (
+        normalize_curated_peer_sets(curated_peer_sets)
+        if curated_peer_sets is not None and not curated_peer_sets.empty
+        else pd.DataFrame(columns=PEER_SET_COLUMNS)
+    )
     if eligible.empty:
-        return pd.DataFrame(columns=PEER_SET_COLUMNS)
+        return normalized_curated
 
     market_caps = _latest_market_caps(fundamentals)
     rows: list[dict[str, object]] = []
@@ -137,6 +192,7 @@ def build_peer_sets_frame(
                     "peer_set_id": f"peer_set::{ticker}",
                     "ticker": ticker,
                     "peer_ticker": str(peer_row["ticker"]).strip().upper(),
+                    "peer_source": AUTOMATIC_PEER_SOURCE,
                     "relationship_type": relationship_type,
                     "sector": sector,
                     "industry": industry,
@@ -145,11 +201,18 @@ def build_peer_sets_frame(
                 }
             )
 
-    return pd.DataFrame(rows, columns=PEER_SET_COLUMNS).sort_values(["ticker", "peer_order"]).reset_index(drop=True)
+    automatic = pd.DataFrame(rows, columns=PEER_SET_COLUMNS).sort_values(["ticker", "peer_order"]).reset_index(drop=True)
+    if automatic.empty:
+        return normalized_curated
+    if normalized_curated.empty:
+        return automatic
+    combined = pd.concat([automatic, normalized_curated], ignore_index=True)
+    return combined.sort_values(["ticker", "peer_source", "peer_order", "peer_ticker"]).reset_index(drop=True)
 
 
 def stage_peer_sets(
     *,
+    curated_peer_path: str | Path | None = None,
     settings: AppSettings | None = None,
     write_warehouse: bool = True,
     write_csv: bool = True,
@@ -159,7 +222,13 @@ def stage_peer_sets(
     settings = settings or get_settings()
     security_master = read_canonical_table("security_master", settings=settings)
     fundamentals = read_canonical_table("normalized_fundamentals", settings=settings)
-    peer_sets = build_peer_sets_frame(security_master, fundamentals)
+    curated_path = _resolve_curated_peer_path(curated_peer_path, settings=settings)
+    curated_peer_sets = pd.read_csv(curated_path) if curated_path.exists() else pd.DataFrame(columns=PEER_SET_COLUMNS)
+    peer_sets = build_peer_sets_frame(
+        security_master,
+        fundamentals,
+        curated_peer_sets=curated_peer_sets,
+    )
 
     if write_warehouse:
         write_canonical_table(peer_sets, "peer_sets", settings=settings)

@@ -85,14 +85,27 @@ def calculate_return_windows(
     return pd.DataFrame(rows)
 
 
-def calculate_risk_metrics(price_history: pd.DataFrame) -> dict[str, float | None]:
-    """Calculate trailing volatility and drawdown metrics."""
+def calculate_risk_metrics(
+    price_history: pd.DataFrame,
+    *,
+    benchmark_history: pd.DataFrame | None = None,
+    risk_free_rate: float = 0.0,
+) -> dict[str, float | None]:
+    """Calculate trailing volatility, drawdown, beta, and downside-risk metrics.
+
+    V1 conventions:
+    - annualized volatility uses trailing daily returns over 21, 63, and 252 days
+    - downside volatility uses trailing 252 daily returns below the daily MAR
+    - beta uses trailing 252 overlapping daily returns versus the primary benchmark
+    """
 
     if price_history.empty:
         return {
             "annualized_volatility_1m": None,
             "annualized_volatility_3m": None,
             "annualized_volatility_1y": None,
+            "downside_volatility_1y": None,
+            "beta_1y": None,
             "current_drawdown": None,
             "max_drawdown": None,
             "max_drawdown_1y": None,
@@ -106,12 +119,44 @@ def calculate_risk_metrics(price_history: pd.DataFrame) -> dict[str, float | Non
             return None
         return float(daily_returns.tail(window).std(ddof=1) * sqrt(252))
 
+    def annualized_downside_volatility(window: int) -> float | None:
+        if len(daily_returns) < window:
+            return None
+        trailing_returns = daily_returns.tail(window)
+        daily_minimum_acceptable_return = risk_free_rate / 252
+        downside_returns = trailing_returns.loc[trailing_returns < daily_minimum_acceptable_return]
+        if len(downside_returns) < 2:
+            return None
+        downside_deviation = (downside_returns - daily_minimum_acceptable_return).pow(2).mean() ** 0.5
+        return float(downside_deviation * sqrt(252))
+
     def max_drawdown(series: pd.Series) -> float | None:
         if series.empty:
             return None
         running_peak = series.cummax()
         drawdown = (series / running_peak) - 1
         return float(drawdown.min())
+
+    beta_1y = None
+    if benchmark_history is not None and not benchmark_history.empty:
+        benchmark_returns = (
+            benchmark_history.sort_values("date")
+            .reset_index(drop=True)[["date", "daily_return"]]
+            .rename(columns={"daily_return": "benchmark_daily_return"})
+        )
+        aligned_returns = history[["date", "daily_return"]].merge(
+            benchmark_returns,
+            on="date",
+            how="inner",
+        )
+        aligned_returns = aligned_returns.dropna(subset=["daily_return", "benchmark_daily_return"]).tail(252)
+        if len(aligned_returns) >= 30:
+            benchmark_variance = float(aligned_returns["benchmark_daily_return"].var(ddof=1))
+            if benchmark_variance > 0:
+                covariance = float(
+                    aligned_returns[["daily_return", "benchmark_daily_return"]].cov(ddof=1).iloc[0, 1]
+                )
+                beta_1y = covariance / benchmark_variance
 
     prices = history["adj_close"]
     trailing_prices = prices.tail(252)
@@ -122,6 +167,8 @@ def calculate_risk_metrics(price_history: pd.DataFrame) -> dict[str, float | Non
         "annualized_volatility_1m": annualized_volatility(21),
         "annualized_volatility_3m": annualized_volatility(63),
         "annualized_volatility_1y": annualized_volatility(252),
+        "downside_volatility_1y": annualized_downside_volatility(252),
+        "beta_1y": beta_1y,
         "current_drawdown": current_drawdown,
         "max_drawdown": max_drawdown(prices),
         "max_drawdown_1y": max_drawdown(trailing_prices),
@@ -279,33 +326,42 @@ def build_fundamentals_summary(fundamentals: pd.DataFrame, ticker: str) -> dict[
         rows["period_end_date"] = pd.NaT
     if "period_type" not in rows.columns:
         rows["period_type"] = None
-    latest = rows.sort_values(
-        by=["as_of_date", "period_end_date", "period_type"],
-        key=lambda series: series.map(
-            lambda value: 2
-            if value == "ttm"
-            else 1
-            if value == "annual"
-            else 0
+    period_rank = {"quarterly": 0, "annual": 1, "ttm": 2}
+
+    def _sort_frame(frame: pd.DataFrame) -> pd.DataFrame:
+        return frame.sort_values(
+            by=["as_of_date", "period_end_date", "period_type"],
+            key=lambda series: series.map(lambda value: period_rank.get(value, -1))
+            if series.name == "period_type"
+            else series,
         )
-        if series.name == "period_type"
-        else series,
-    ).iloc[-1]
 
-    total_cash = latest.get("total_cash")
-    total_debt = latest.get("total_debt")
-    revenue_ttm = latest.get("revenue_ttm")
-    free_cash_flow = latest.get("free_cash_flow")
+    def _latest_row(frame: pd.DataFrame) -> pd.Series:
+        return _sort_frame(frame).iloc[-1]
 
-    net_cash = (
-        float(total_cash) - float(total_debt)
-        if pd.notna(total_cash) and pd.notna(total_debt)
-        else None
-    )
-    free_cash_flow_margin = (
-        float(free_cash_flow) / float(revenue_ttm)
-        if pd.notna(free_cash_flow) and pd.notna(revenue_ttm) and float(revenue_ttm) != 0
-        else None
+    def _resolve_latest_non_null(
+        columns: list[str],
+        *,
+        allowed_period_types: set[str] | None = None,
+    ) -> pd.Series:
+        available_columns = [column for column in columns if column in rows.columns]
+        if not available_columns:
+            return pd.Series(dtype=object)
+        candidate_rows = rows.copy()
+        if allowed_period_types is not None:
+            candidate_rows = candidate_rows.loc[candidate_rows["period_type"].isin(allowed_period_types)].copy()
+        candidate_rows = candidate_rows.dropna(subset=available_columns, how="all")
+        if candidate_rows.empty:
+            return pd.Series(dtype=object)
+        return _latest_row(candidate_rows)
+
+    # Prefer the latest TTM-style row for flow metrics, but separately resolve the
+    # latest non-null balance-sheet snapshot because point-in-time fields like cash
+    # and debt are not consistently populated on TTM rows.
+    latest = _latest_row(rows)
+    latest_balance_sheet = _resolve_latest_non_null(
+        ["total_cash", "total_debt", "current_assets", "current_liabilities"],
+        allowed_period_types={"quarterly", "annual"},
     )
 
     summary_fields = [
@@ -332,10 +388,33 @@ def build_fundamentals_summary(fundamentals: pd.DataFrame, ticker: str) -> dict[
         "dividend_yield",
         "total_cash",
         "total_debt",
+        "current_assets",
+        "current_liabilities",
         "current_ratio",
         "debt_to_equity",
     ]
     summary = {field: latest.get(field) for field in summary_fields}
+    if not latest_balance_sheet.empty:
+        for field in ("total_cash", "total_debt", "current_assets", "current_liabilities"):
+            if pd.isna(summary.get(field)):
+                summary[field] = latest_balance_sheet.get(field)
+
+    total_cash = summary.get("total_cash")
+    total_debt = summary.get("total_debt")
+    revenue_ttm = summary.get("revenue_ttm")
+    free_cash_flow = summary.get("free_cash_flow")
+
+    net_cash = (
+        float(total_cash) - float(total_debt)
+        if pd.notna(total_cash) and pd.notna(total_debt)
+        else None
+    )
+    free_cash_flow_margin = (
+        float(free_cash_flow) / float(revenue_ttm)
+        if pd.notna(free_cash_flow) and pd.notna(revenue_ttm) and float(revenue_ttm) != 0
+        else None
+    )
+
     summary["as_of_date"] = latest["as_of_date"].date().isoformat()
     summary["net_cash"] = net_cash
     summary["free_cash_flow_margin"] = free_cash_flow_margin
@@ -400,6 +479,7 @@ def build_peer_valuation_comparison(
             columns=[
                 "ticker",
                 "company_name",
+                "peer_source",
                 "relationship_type",
                 "selection_method",
                 "peer_order",
@@ -445,6 +525,7 @@ def build_peer_valuation_comparison(
             columns=[
                 "ticker",
                 "company_name",
+                "peer_source",
                 "relationship_type",
                 "selection_method",
                 "peer_order",
@@ -479,6 +560,7 @@ def build_peer_valuation_comparison(
         ])
 
     focal_row["relationship_type"] = "focal_company"
+    focal_row["peer_source"] = "self"
     focal_row["selection_method"] = "self"
     focal_row["peer_order"] = 0
     focal_row["is_focal_company"] = True
@@ -503,6 +585,7 @@ def build_peer_valuation_comparison(
             [
                 "ticker",
                 "company_name",
+                "peer_source",
                 "relationship_type",
                 "selection_method",
                 "peer_order",
@@ -521,6 +604,7 @@ def build_peer_valuation_comparison(
         [
             "ticker",
             "company_name",
+            "peer_source",
             "relationship_type",
             "selection_method",
             "peer_order",
@@ -558,6 +642,7 @@ def build_peer_return_comparison(
             columns=[
                 "ticker",
                 "relationship_type",
+                "peer_source",
                 "selection_method",
                 "peer_order",
                 "window",
@@ -574,6 +659,7 @@ def build_peer_return_comparison(
             {
                 "ticker": normalized_ticker,
                 "relationship_type": "focal_company",
+                "peer_source": "self",
                 "selection_method": "self",
                 "peer_order": 0,
                 "window": company_row["window"],
@@ -607,6 +693,7 @@ def build_peer_return_comparison(
                 {
                     "ticker": peer_ticker,
                     "relationship_type": peer_row.get("relationship_type"),
+                    "peer_source": peer_row.get("peer_source"),
                     "selection_method": peer_row.get("selection_method"),
                     "peer_order": peer_row.get("peer_order"),
                     "window": company_row["window"],

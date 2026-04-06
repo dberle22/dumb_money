@@ -48,6 +48,7 @@ PEER_SET_COLUMNS = [
     "peer_set_id",
     "ticker",
     "peer_ticker",
+    "peer_source",
     "relationship_type",
     "sector",
     "industry",
@@ -346,7 +347,11 @@ def _coerce_csv_fallback_frame(frame: pd.DataFrame, spec: WarehouseTableSpec) ->
 def _connect(settings: AppSettings, *, read_only: bool = False) -> duckdb.DuckDBPyConnection:
     if not read_only:
         settings.ensure_directories()
-    return duckdb.connect(str(settings.warehouse_path), read_only=read_only)
+    connection = duckdb.connect(str(settings.warehouse_path), read_only=read_only)
+    # Disable DuckDB's terminal progress bar so shared loaders stay quiet and do
+    # not stall long-running sandboxed verification commands.
+    connection.execute("SET enable_progress_bar = false")
+    return connection
 
 
 def warehouse_table_exists(

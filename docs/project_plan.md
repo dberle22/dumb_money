@@ -521,7 +521,7 @@ Add sector and peer context so company research can be interpreted relative to c
 
 ## Sprint 6: Reporting Standardization
 
-**Status:** Not Started
+**Status:** In Progress
 
 **Goal**
 
@@ -538,21 +538,24 @@ Standardize reporting around an iterative section-by-section workflow so each re
 **Tasks**
 
 - [ ] define the canonical Sprint 6 report sections and lock the section-by-section implementation order
-- [ ] structure report-building so each section lands as a single file that can be reviewed independently
-- [ ] keep DuckDB as the canonical source for shared analytical tables used by report sections
-- [ ] standardize section interfaces so each section has explicit shared inputs, table outputs, chart outputs, and focused tests
-- [ ] implement `Market Performance` first as the anchor section for the Sprint 6 workflow
-- [ ] implement `Research Summary` second using the shared scorecard and section formatting patterns
-- [ ] implement `Trend and Risk Profile` once the market section contract is stable
-- [ ] implement `Balance Sheet Strength` as a point-in-time standardized section before expanding peer context
-- [ ] implement `Valuation` with shared current-state outputs first, then shared peer context where supported
-- [ ] implement `Peer Positioning` using canonical `peer_sets`, peer return outputs, and peer valuation outputs
-- [ ] implement `Score Decomposition` as a standardized transparency section built on shared scorecard outputs
-- [ ] implement `Final Research Summary` only after upstream sections expose stable structured fields
+- [x] structure report-building so each section lands as a single file that can be reviewed independently
+- [x] keep DuckDB as the canonical source for shared analytical tables used by report sections
+- [x] standardize section interfaces so each section has explicit shared inputs, table outputs, chart outputs, and focused tests
+- [x] implement `Market Performance` first as the anchor section for the Sprint 6 workflow
+- [x] implement `Research Summary` second using the shared scorecard and section formatting patterns
+- [x] implement `Trend and Risk Profile` once the market section contract is stable
+- [x] implement `Balance Sheet Strength` as a point-in-time standardized section before expanding peer context
+- [x] implement `Valuation` with shared current-state outputs first, then shared peer context where supported
+- [x] implement `Peer Positioning` using canonical `peer_sets`, peer return outputs, and peer valuation outputs
+- [x] implement `Score Decomposition` as a standardized transparency section built on shared scorecard outputs
+- [x] implement `Final Research Summary` only after upstream sections expose stable structured fields
 - [ ] defer `Growth and Profitability` trend visuals until canonical historical fundamentals support is ready
 - [ ] update report loaders and section builders to prefer DuckDB-backed shared datasets and marts over raw-file or notebook-only logic
 - [ ] add focused tests for each section before advancing to the next section
-- [ ] keep notebooks as thin review layers over shared section modules rather than defining section logic inline
+- [ ] assemble the final Sprint 6 notebook and report review flow so the full output is constructed from shared section modules end to end
+- [ ] add one full-report regression path that runs when we build the assembled Sprint 6 notebook or final output, rather than requiring that broad regression for each individual section slice
+- [ ] after the Sprint 6 visuals are complete, build a gold-layer ticker metrics mart in DuckDB with reusable ticker-level section inputs, then refactor section builders to query only the fields each visual needs
+- [x] keep notebooks as thin review layers over shared section modules rather than defining section logic inline
 
 **Recommended Section Order**
 
@@ -565,6 +568,27 @@ Standardize reporting around an iterative section-by-section workflow so each re
 7. `Score Decomposition`
 8. `Final Research Summary`
 9. `Growth and Profitability`
+10. `Full Report Assembly`
+11. `Gold-Layer Ticker Metrics Mart`
+
+**Current Sprint 6 Progress**
+
+- Completed section modules:
+  `Market Performance`, `Research Summary`, `Trend and Risk Profile`, `Balance Sheet Strength`, `Valuation`, `Peer Positioning`, `Score Decomposition`, and `Final Research Summary` now exist as dedicated shared section files under `src/dumb_money/outputs/`
+- Completed review artifacts:
+  AAPL review outputs now exist under `reports/templates/market_performance`, `reports/templates/research_summary`, `reports/templates/balance_sheet_strength`, `reports/templates/valuation`, `reports/templates/peer_positioning`, `reports/templates/score_decomposition`, and `reports/templates/final_research_summary`
+- Shared-contract progress:
+  report sections now consistently build from canonical DuckDB-backed inputs or shared staged summaries rather than notebook-only logic; valuation now reuses shared scorecard metrics plus canonical peer valuation context when `peer_sets` are available, peer positioning now reuses canonical peer return, peer valuation, and sector snapshot context through one shared section contract, score decomposition now reuses canonical category scores plus metric-level score transparency fields without redefining score math in the section layer, and final research summary now synthesizes upstream section evidence into one deterministic closing memo and review card rather than bespoke notebook prose
+- Benchmark-set requirement:
+  the full single-ticker notebook workflow requires the chosen benchmark set to include any sector, style, or industry ETFs referenced by canonical `benchmark_mappings`; `sample_universe` has now been refreshed to carry the current sector and industry ETF coverage so future ticker onboarding should usually only require correct benchmark mappings rather than benchmark-set edits
+- Peer-set progress:
+  canonical `peer_sets` now include `peer_source` so downstream sections can distinguish `automatic` peer rows from `curated` research peer lists while still reading one shared contract from DuckDB
+- Full-report verification note:
+  broad end-to-end regression is now better treated as a final notebook or report-assembly check than as a blocking verification step for each section slice; the remaining Sprint 6 closeout should add one explicit assembled-report regression path
+- Planned closeout refactor:
+  once the remaining Sprint 6 visuals are complete, add a gold-layer ticker metrics data product in DuckDB so section modules can read precomputed ticker-level metrics instead of assembling broader research packets than they need
+- Follow-up documentation gap:
+  we should add one shared reference for KPI definitions, score metric definitions, and score interpretation bands before Sprint 6 is considered complete
 
 **Section Plan**
 
@@ -623,6 +647,8 @@ Standardize reporting around an iterative section-by-section workflow so each re
    leverage calculations, zero-debt handling, unavailable EBITDA behavior, interpretation flags
    Risks/dependencies:
    interest coverage is still not modeled from canonical inputs
+   Current status:
+   completed as a dedicated shared section module with reusable table, strip, interpretation text, and saved AAPL review artifact; shared fundamentals summary logic now mixes latest TTM flow fields with latest quarterly or annual balance-sheet snapshot fields for cash, debt, and net cash
 
 5. `Valuation`
    Narrative goal:
@@ -637,6 +663,8 @@ Standardize reporting around an iterative section-by-section workflow so each re
    peer-median fallback, free-cash-flow-yield derivation, missing peer coverage
    Risks/dependencies:
    historical valuation bands and valuation-versus-growth views remain out of scope until more canonical history exists
+   Current status:
+   completed as a dedicated shared section module with reusable summary table, score strip, peer comparison output, interpretation text, and saved AAPL review artifact; canonical peer sets now support both `automatic` and `curated` rows through the shared `peer_source` field, and the current AAPL peer valuation context is backed by a curated mega-cap tech peer list
 
 6. `Peer Positioning`
    Narrative goal:
@@ -670,15 +698,23 @@ Standardize reporting around an iterative section-by-section workflow so each re
    Narrative goal:
    close the memo with a short, standardized takeaway tied back to structured evidence
    Shared data inputs:
-   total score, strongest and weakest sections, major valuation and risk watch items
+   total score, confidence score, interpretation label, strongest and weakest sections, category score context, valuation support or constraint fields, risk watch items, peer-positioning context where available, and stable strengths and constraints from upstream section outputs
    Visuals/tables:
-   short final memo text and optional compact closing summary panel
+   reusable short final memo text plus a compact closing summary table or card with standardized `what is working`, `what is not working`, `bottom line`, and `what to watch` fields; add one combined closing review figure only if it can be assembled cleanly from existing shared section outputs
    Shared boundaries:
-   final summary should be generated from stable shared section outputs rather than handcrafted notebook text
+   final summary should be generated from stable shared section outputs rather than handcrafted notebook text; section-specific logic should live in a dedicated shared module under `src/dumb_money/outputs/final_research_summary_section.py`, while score math, valuation context, risk context, and peer analytics remain in their existing shared modules
    Focused tests:
-   narrative branch selection, missing-data fallback, consistency with upstream score outputs
+   narrative branch selection, evidence-field assembly, missing-data fallback, consistency with upstream score outputs, and stable closing-table formatting
    Risks/dependencies:
-   should be implemented after the upstream sections expose stable structured fields
+   should be implemented after the upstream sections expose stable structured fields and should prefer canonical score outputs plus reusable upstream section evidence over bespoke memo prose
+   Implementation pattern:
+   follow the same single-file-per-section workflow already used for `Market Performance`, `Research Summary`, `Trend and Risk Profile`, `Balance Sheet Strength`, `Valuation`, `Peer Positioning`, and `Score Decomposition`: explicit shared inputs, clear transformations, concise inline comments, focused tests, and a saved AAPL review artifact under `reports/templates/final_research_summary`
+   Section assembly guidance:
+   derive the closing memo deterministically from canonical score outputs and stable upstream section evidence first; use valuation, risk, and peer context where available, and fall back gracefully when richer catalyst or watch-item fields do not yet exist
+   Definition of done:
+   `Final Research Summary` exists as an independently buildable shared section module, produces a reusable memo plus standardized closing review output, saves an AAPL review artifact, and is covered by focused tests and verification commands
+   Current status:
+   completed as a dedicated shared section module with reusable memo text, standardized closing summary table, saved AAPL review artifact, and a narrowed ticker-level build path that avoids requiring the full assembled-report regression for each section-level iteration
 
 9. `Growth and Profitability`
    Narrative goal:
@@ -693,6 +729,34 @@ Standardize reporting around an iterative section-by-section workflow so each re
    period alignment, growth-rate math, sparse-history handling, TTM versus annual handling
    Risks/dependencies:
    this remains the clearest dependency-blocked section and should come after the ready-now sections
+
+10. `Full Report Assembly`
+   Narrative goal:
+   assemble the finished Sprint 6 notebook or report output from the shared section modules so the whole memo can be reviewed end to end rather than as separate section artifacts
+   Shared data inputs:
+   all completed section modules, shared report helpers, notebook review flow, output ordering, and artifact-save conventions
+   Visuals/tables:
+   one assembled notebook or report flow that renders the full sequence of completed sections with a repeatable final output path
+   Shared boundaries:
+   notebooks should stay thin and orchestrate shared section modules only; final assembly should not reintroduce section logic into notebook cells
+   Focused tests:
+   one broad assembled-report regression path, section-order checks, artifact-generation smoke test, and notebook or export wiring checks
+   Risks/dependencies:
+   this should be the place where we run the heavier end-to-end regression, since it effectively rebuilds the whole report stack and is too expensive to require on every section slice
+
+11. `Gold-Layer Ticker Metrics Mart`
+   Narrative goal:
+   refactor Sprint 6 section inputs onto a simpler gold-layer ticker metrics table so each section can query the exact stable fields it needs without rebuilding oversized research packets
+   Shared data inputs:
+   canonical staged prices, fundamentals, benchmark mappings, peer sets, sector snapshots, score outputs, and standardized section-level derived metrics
+   Visuals/tables:
+   no direct visual requirement; the primary output is one DuckDB gold-layer ticker metrics table or mart plus thin section-loader updates
+   Shared boundaries:
+   DuckDB remains canonical, marts should expose stable queryable section inputs, and section modules should move toward reading precomputed ticker-level fields rather than reconstructing broad upstream packets on demand
+   Focused tests:
+   DuckDB schema and contract validation, field-level derivation tests, mart refresh smoke tests, and one section-loader regression proving sections can read the gold layer cleanly
+   Risks/dependencies:
+   this is the main Sprint 6 closeout refactor and should follow section stabilization plus the first end-to-end notebook assembly so we refactor toward a proven final report contract
 
 **Single-File Section Workflow**
 
@@ -885,3 +949,5 @@ The MVP is complete when the repo can:
 |---|---|---|
 | 2026-03-29 | Initial project plan created from implementation roadmap | Codex |
 | 2026-04-04 | Expanded Sprint 6 into a section-by-section reporting plan with single-file-per-section review workflow | Codex |
+| 2026-04-05 | Marked Sprint 6 as in progress and recorded completed section modules for Market Performance, Research Summary, Trend and Risk Profile, and Balance Sheet Strength | Codex |
+| 2026-04-05 | Marked Sprint 6 Valuation complete, documented the new valuation section artifact, and recorded the canonical `peer_sets.peer_source` contract for automatic versus curated peers | Codex |

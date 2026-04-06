@@ -245,6 +245,7 @@ def test_write_and_read_peer_sets_round_trip(tmp_path) -> None:
             "peer_set_id": ["peer_set::AAPL", "peer_set::AAPL"],
             "ticker": ["AAPL", "AAPL"],
             "peer_ticker": ["MSFT", "DELL"],
+            "peer_source": ["automatic", "curated"],
             "relationship_type": ["sector", "sector"],
             "sector": ["Technology", "Technology"],
             "industry": ["Consumer Electronics", "Consumer Electronics"],
