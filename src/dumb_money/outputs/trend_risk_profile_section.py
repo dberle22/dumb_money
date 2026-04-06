@@ -15,15 +15,18 @@ from matplotlib.figure import Figure
 from dumb_money.analytics.company import (
     build_drawdown_series,
     build_moving_average_series,
-    calculate_risk_metrics,
-    calculate_trend_metrics,
 )
 from dumb_money.config import AppSettings, get_settings
 from dumb_money.outputs.market_performance_section import (
     SERIES_COLORS,
     build_market_performance_section_data,
 )
-from dumb_money.research.company import CompanyResearchPacket
+from dumb_money.research.company import (
+    CompanyResearchPacket,
+    build_risk_metrics_from_mart_row,
+    build_trend_metrics_from_mart_row,
+    load_gold_ticker_metrics_row,
+)
 
 SUMMARY_COLUMNS = ["Metric", "Value", "Assessment", "Shared Input"]
 
@@ -382,6 +385,7 @@ def build_trend_risk_profile_section_data(
 
     settings = settings or get_settings()
     normalized_ticker = ticker.strip().upper()
+    mart_row = load_gold_ticker_metrics_row(normalized_ticker, settings=settings)
 
     # Reuse the Market Performance section's DuckDB-aware history contract so this
     # section stays aligned on benchmark selection and canonical price access.
@@ -396,9 +400,14 @@ def build_trend_risk_profile_section_data(
         for benchmark in [market_data.primary_benchmark, market_data.secondary_benchmark]
         if benchmark and benchmark in market_data.histories
     }
-    primary_benchmark_history = benchmark_histories.get(market_data.primary_benchmark)
-    risk_metrics = calculate_risk_metrics(company_history, benchmark_history=primary_benchmark_history)
-    trend_metrics = calculate_trend_metrics(company_history)
+    risk_metrics = build_risk_metrics_from_mart_row(mart_row)
+    trend_metrics = build_trend_metrics_from_mart_row(mart_row)
+    if not risk_metrics or not trend_metrics:
+        from dumb_money.analytics.company import calculate_risk_metrics, calculate_trend_metrics
+
+        primary_benchmark_history = benchmark_histories.get(market_data.primary_benchmark)
+        risk_metrics = calculate_risk_metrics(company_history, benchmark_history=primary_benchmark_history)
+        trend_metrics = calculate_trend_metrics(company_history)
 
     packet = CompanyResearchPacket(
         ticker=normalized_ticker,
@@ -419,8 +428,8 @@ def build_trend_risk_profile_section_data(
         sector_snapshot={},
         scorecard=SimpleNamespace(
             summary={
-                "primary_benchmark": market_data.primary_benchmark,
-                "secondary_benchmark": market_data.secondary_benchmark,
+                "primary_benchmark": mart_row.get("primary_benchmark") or market_data.primary_benchmark,
+                "secondary_benchmark": mart_row.get("secondary_benchmark") or market_data.secondary_benchmark,
             }
         ),
     )

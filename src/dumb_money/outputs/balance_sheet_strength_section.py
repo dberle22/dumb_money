@@ -11,11 +11,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.figure import Figure
 
-from dumb_money.analytics.company import build_fundamentals_summary
 from dumb_money.analytics.scorecard import build_company_scorecard
 from dumb_money.config import AppSettings, get_settings
 from dumb_money.research.company import (
     CompanyResearchPacket,
+    build_fundamentals_summary_from_mart_row,
+    load_gold_ticker_metrics_row,
     load_security_master,
     load_staged_fundamentals,
 )
@@ -247,9 +248,14 @@ def build_balance_sheet_strength_section_data(
 
     settings = settings or get_settings()
     normalized_ticker = ticker.strip().upper()
+    mart_row = load_gold_ticker_metrics_row(normalized_ticker, settings=settings)
 
-    fundamentals = load_staged_fundamentals(settings=settings)
-    fundamentals_summary = build_fundamentals_summary(fundamentals, normalized_ticker)
+    fundamentals_summary = build_fundamentals_summary_from_mart_row(mart_row)
+    if not fundamentals_summary:
+        fundamentals = load_staged_fundamentals(settings=settings)
+        from dumb_money.analytics.company import build_fundamentals_summary
+
+        fundamentals_summary = build_fundamentals_summary(fundamentals, normalized_ticker)
     security_master = load_security_master(settings=settings)
     security_rows = (
         security_master.loc[security_master["ticker"] == normalized_ticker].copy()
@@ -265,7 +271,7 @@ def build_balance_sheet_strength_section_data(
         company_name=fundamentals_summary.get("long_name"),
         sector=fundamentals_summary.get("sector") or security_row.get("sector"),
         industry=fundamentals_summary.get("industry") or security_row.get("industry"),
-        score_date=fundamentals_summary.get("as_of_date"),
+        score_date=mart_row.get("score_date") or fundamentals_summary.get("as_of_date"),
         benchmark_comparison=pd.DataFrame(),
         risk_metrics={},
         trend_metrics={},
@@ -274,7 +280,7 @@ def build_balance_sheet_strength_section_data(
     )
     packet = CompanyResearchPacket(
         ticker=normalized_ticker,
-        company_name=fundamentals_summary.get("long_name"),
+        company_name=mart_row.get("company_name") or fundamentals_summary.get("long_name"),
         as_of_date=fundamentals_summary.get("as_of_date"),
         company_history=pd.DataFrame(),
         benchmark_histories={},

@@ -12,7 +12,6 @@ import pandas as pd
 from matplotlib.figure import Figure
 
 from dumb_money.analytics.company import (
-    build_fundamentals_summary,
     build_peer_summary_stats,
     build_peer_valuation_comparison,
 )
@@ -20,6 +19,9 @@ from dumb_money.analytics.scorecard import build_company_scorecard
 from dumb_money.config import AppSettings, get_settings
 from dumb_money.research.company import (
     CompanyResearchPacket,
+    build_fundamentals_summary_from_mart_row,
+    build_peer_summary_stats_from_mart_row,
+    load_gold_ticker_metrics_row,
     load_peer_sets,
     load_security_master,
     load_staged_fundamentals,
@@ -406,9 +408,14 @@ def build_valuation_section_data(
 
     settings = settings or get_settings()
     normalized_ticker = ticker.strip().upper()
+    mart_row = load_gold_ticker_metrics_row(normalized_ticker, settings=settings)
 
     fundamentals = load_staged_fundamentals(settings=settings)
-    fundamentals_summary = build_fundamentals_summary(fundamentals, normalized_ticker)
+    fundamentals_summary = build_fundamentals_summary_from_mart_row(mart_row)
+    if not fundamentals_summary:
+        from dumb_money.analytics.company import build_fundamentals_summary
+
+        fundamentals_summary = build_fundamentals_summary(fundamentals, normalized_ticker)
     peer_sets = load_peer_sets(settings=settings)
     security_master = load_security_master(settings=settings)
 
@@ -429,7 +436,7 @@ def build_valuation_section_data(
         peer_rows,
         fundamentals,
     )
-    peer_summary_stats = build_peer_summary_stats(peer_valuation_comparison)
+    peer_summary_stats = build_peer_summary_stats_from_mart_row(mart_row) or build_peer_summary_stats(peer_valuation_comparison)
 
     # This section only needs the latest fundamentals snapshot plus canonical peer
     # valuation context to reuse the shared valuation scorecard formulas.
@@ -438,7 +445,7 @@ def build_valuation_section_data(
         company_name=fundamentals_summary.get("long_name"),
         sector=fundamentals_summary.get("sector") or security_row.get("sector"),
         industry=fundamentals_summary.get("industry") or security_row.get("industry"),
-        score_date=fundamentals_summary.get("as_of_date"),
+        score_date=mart_row.get("score_date") or fundamentals_summary.get("as_of_date"),
         benchmark_comparison=pd.DataFrame(),
         risk_metrics={},
         trend_metrics={},
@@ -447,7 +454,7 @@ def build_valuation_section_data(
     )
     packet = CompanyResearchPacket(
         ticker=normalized_ticker,
-        company_name=fundamentals_summary.get("long_name"),
+        company_name=mart_row.get("company_name") or fundamentals_summary.get("long_name"),
         as_of_date=fundamentals_summary.get("as_of_date"),
         company_history=pd.DataFrame(),
         benchmark_histories={},

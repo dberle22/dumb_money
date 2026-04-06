@@ -12,6 +12,7 @@ from dumb_money.analytics.company import (
     calculate_return_windows,
     calculate_risk_metrics,
     calculate_trend_metrics,
+    prepare_fundamentals_history,
     prepare_price_history,
 )
 
@@ -91,8 +92,12 @@ def test_build_benchmark_comparison_and_fundamentals_summary() -> None:
             "operating_margin": [0.3],
             "profit_margin": [0.2],
             "free_cash_flow": [250_000_000],
+            "nopat": [200_000_000],
+            "interest_expense": [5_000_000],
+            "invested_capital": [900_000_000],
             "return_on_equity": [0.8],
             "return_on_assets": [0.2],
+            "return_on_invested_capital": [0.2222],
             "trailing_pe": [30],
             "forward_pe": [25],
             "ev_to_ebitda": [18],
@@ -116,6 +121,7 @@ def test_build_benchmark_comparison_and_fundamentals_summary() -> None:
     assert summary["long_name"] == "Apple Inc."
     assert summary["net_cash"] == 30_000_000
     assert summary["free_cash_flow_margin"] == 0.25
+    assert summary["return_on_invested_capital"] == 0.2222
 
 
 def test_build_fundamentals_summary_backfills_snapshot_fields_from_latest_quarterly_row() -> None:
@@ -198,6 +204,69 @@ def test_build_fundamentals_summary_backfills_snapshot_fields_from_latest_quarte
     assert summary["current_assets"] == 158_104_000
     assert summary["current_liabilities"] == 162_367_000
     assert summary["net_cash"] == -23_602_000
+
+
+def test_prepare_fundamentals_history_derives_trend_fields_from_explicit_period_contract() -> None:
+    fundamentals = pd.DataFrame(
+        [
+            {
+                "ticker": "TEST",
+                "as_of_date": "2026-04-01",
+                "period_end_date": "2025-03-31",
+                "fiscal_year": 2025,
+                "fiscal_quarter": 1,
+                "fiscal_period": "Q1",
+                "period_type": "quarterly",
+                "revenue": 100.0,
+                "gross_profit": 45.0,
+                "operating_income": 18.0,
+                "net_income": 10.0,
+                "free_cash_flow": 14.0,
+                "shares_outstanding": 5.0,
+                "basic_eps": 1.95,
+                "diluted_eps": 1.90,
+                "eps_trailing": None,
+                "gross_margin": None,
+                "operating_margin": None,
+                "return_on_equity": 0.24,
+                "return_on_assets": 0.10,
+                "return_on_invested_capital": 0.12,
+            },
+            {
+                "ticker": "TEST",
+                "as_of_date": "2026-04-01",
+                "period_end_date": "2025-06-30",
+                "fiscal_year": 2025,
+                "fiscal_quarter": 2,
+                "fiscal_period": "Q2",
+                "period_type": "quarterly",
+                "revenue": 110.0,
+                "gross_profit": 52.8,
+                "operating_income": 22.0,
+                "net_income": 11.0,
+                "free_cash_flow": 17.6,
+                "shares_outstanding": 5.0,
+                "basic_eps": 2.15,
+                "diluted_eps": 2.10,
+                "eps_trailing": None,
+                "gross_margin": None,
+                "operating_margin": None,
+                "return_on_equity": 0.25,
+                "return_on_assets": 0.11,
+                "return_on_invested_capital": 0.14,
+            },
+        ]
+    )
+
+    history = prepare_fundamentals_history(fundamentals, "TEST", period_type="quarterly")
+
+    assert history["period_label"].tolist() == ["Q1 2025", "Q2 2025"]
+    assert round(float(history.loc[0, "eps_value"]), 2) == 1.90
+    assert history.loc[0, "eps_basis"] == "diluted_eps statement"
+    assert round(float(history.loc[1, "revenue_growth"]), 4) == 0.10
+    assert round(float(history.loc[1, "gross_margin_value"]), 4) == 0.48
+    assert round(float(history.loc[1, "operating_margin_value"]), 4) == 0.20
+    assert round(float(history.loc[1, "free_cash_flow_margin"]), 4) == 0.16
 
 
 def test_build_peer_valuation_comparison_and_summary_stats() -> None:

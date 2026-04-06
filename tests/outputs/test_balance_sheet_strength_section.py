@@ -8,6 +8,7 @@ import pandas as pd
 matplotlib.use("Agg")
 
 from dumb_money.analytics.scorecard import CompanyScorecard, build_company_scorecard
+from dumb_money.config import AppSettings
 from dumb_money.outputs import (
     build_balance_sheet_strength_section_data,
     build_balance_sheet_strength_table,
@@ -18,6 +19,7 @@ from dumb_money.outputs.balance_sheet_strength_section import (
     build_balance_sheet_strength_section_data_from_packet,
 )
 from dumb_money.research.company import CompanyResearchPacket
+from dumb_money.storage import GOLD_TICKER_METRICS_MART_COLUMNS, write_canonical_table
 
 
 def _build_packet_from_scorecard(scorecard: CompanyScorecard) -> CompanyResearchPacket:
@@ -181,3 +183,34 @@ def test_balance_sheet_strength_section_builds_from_aapl_and_saves(tmp_path) -> 
     assert artifacts["table_path"].exists()
     assert artifacts["strip_path"].exists()
     assert artifacts["text_path"].exists()
+
+
+def test_balance_sheet_strength_section_can_build_from_mart_snapshot_only(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    settings.ensure_directories()
+
+    mart_row = {column: None for column in GOLD_TICKER_METRICS_MART_COLUMNS}
+    mart_row.update(
+        {
+            "mart_id": "gold_ticker_metrics::AAPL::2025-01-15",
+            "ticker": "AAPL",
+            "as_of_date": "2024-12-31",
+            "score_date": "2025-01-15",
+            "company_name": "Apple Mart Name",
+            "sector": "Technology",
+            "industry": "Consumer Electronics",
+            "ebitda": 120_000_000_000.0,
+            "free_cash_flow": 95_000_000_000.0,
+            "current_ratio": 1.5,
+            "debt_to_equity": 1.2,
+            "total_cash": 60_000_000_000.0,
+            "total_debt": 100_000_000_000.0,
+        }
+    )
+    write_canonical_table(pd.DataFrame([mart_row]), "gold_ticker_metrics_mart", settings=settings)
+
+    data = build_balance_sheet_strength_section_data("AAPL", settings=settings)
+
+    assert data.company_name == "Apple Mart Name"
+    assert data.report_date == "2025-01-15"
+    assert "Net debt to EBITDA" in data.summary_table["Metric"].tolist()

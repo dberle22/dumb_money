@@ -41,6 +41,10 @@ from dumb_money.transforms.security_universe import (
     stage_security_master_overrides,
 )
 from dumb_money.transforms.security_master import build_security_master_frame, stage_security_master
+from dumb_money.transforms.ticker_metrics_mart import (
+    build_gold_ticker_metrics_mart_frame,
+    stage_gold_ticker_metrics_mart,
+)
 
 __all__ = [
     "BENCHMARK_SET_COLUMNS",
@@ -80,4 +84,6 @@ __all__ = [
     "stage_prices",
     "stage_security_master_overrides",
     "stage_security_master",
+    "build_gold_ticker_metrics_mart_frame",
+    "stage_gold_ticker_metrics_mart",
 ]

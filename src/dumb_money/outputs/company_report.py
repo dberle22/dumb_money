@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from dumb_money import _matplotlib  # noqa: F401
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.axes import Axes
+from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 
+from dumb_money.config import AppSettings, get_settings
 from dumb_money.analytics.company import (
     build_drawdown_series,
     build_indexed_price_series,
@@ -17,32 +21,73 @@ from dumb_money.analytics.company import (
 )
 from dumb_money.analytics.scorecard import CATEGORY_TARGET_WEIGHTS
 from dumb_money.outputs.balance_sheet_strength_section import (
+    BalanceSheetStrengthSectionData,
+    build_balance_sheet_strength_section_data,
     build_balance_sheet_strength_section_data_from_packet,
     build_balance_sheet_strength_table as build_section_balance_sheet_strength_table,
+    render_balance_sheet_strength_section,
+    save_balance_sheet_strength_section,
 )
 from dumb_money.outputs.final_research_summary_section import (
+    FinalResearchSummarySectionData,
+    build_final_research_summary_section_data,
     build_final_research_summary_section_data_from_packet,
     build_final_research_summary_text_from_data,
+    render_final_research_summary_section,
+    save_final_research_summary_section,
+)
+from dumb_money.outputs.growth_profitability_section import (
+    GrowthProfitabilitySectionData,
+    build_growth_profitability_section_data,
+    render_growth_profitability_section,
+    save_growth_profitability_section,
+)
+from dumb_money.outputs.market_performance_section import (
+    MarketPerformanceSectionData,
+    build_market_performance_section_data,
+    render_market_performance_section,
+    save_market_performance_section,
 )
 from dumb_money.outputs.peer_positioning_section import (
+    PeerPositioningSectionData,
+    build_peer_positioning_section_data,
     build_peer_positioning_return_table as build_section_peer_positioning_return_table,
     build_peer_positioning_section_data_from_packet,
     build_peer_positioning_valuation_table as build_section_peer_positioning_valuation_table,
+    render_peer_positioning_section,
+    save_peer_positioning_section,
 )
 from dumb_money.outputs.research_summary_section import (
+    ResearchSummarySectionData,
+    build_research_summary_section_data,
     build_research_summary_section_data_from_packet,
     build_research_summary_strip_table as build_section_research_summary_strip_table,
     build_research_summary_table as build_section_research_summary_table,
     build_research_summary_text_from_data,
     render_research_summary_section,
+    save_research_summary_section,
+)
+from dumb_money.outputs.score_decomposition_section import (
+    ScoreDecompositionSectionData,
+    build_score_decomposition_section_data,
+    render_score_decomposition_section,
+    save_score_decomposition_section,
 )
 from dumb_money.outputs.trend_risk_profile_section import (
+    TrendRiskProfileSectionData,
+    build_trend_risk_profile_section_data,
     build_trend_risk_profile_section_data_from_packet,
     build_trend_risk_profile_table as build_section_trend_risk_profile_table,
+    render_trend_risk_profile_section,
+    save_trend_risk_profile_section,
 )
 from dumb_money.outputs.valuation_section import (
+    ValuationSectionData,
+    build_valuation_section_data,
     build_valuation_section_data_from_packet,
     build_valuation_summary_table as build_section_valuation_summary_table,
+    render_valuation_section,
+    save_valuation_section,
 )
 from dumb_money.research.company import CompanyResearchPacket
 
@@ -57,6 +102,35 @@ CATEGORY_COLORS: dict[str, str] = {
     "Balance Sheet Strength": "#b45309",
     "Valuation": "#7c3aed",
 }
+
+FULL_REPORT_SECTION_ORDER: tuple[tuple[str, str], ...] = (
+    ("market_performance", "Market Performance"),
+    ("research_summary", "Research Summary"),
+    ("trend_risk_profile", "Trend and Risk Profile"),
+    ("balance_sheet_strength", "Balance Sheet Strength"),
+    ("valuation", "Valuation"),
+    ("peer_positioning", "Peer Positioning"),
+    ("score_decomposition", "Score Decomposition"),
+    ("growth_profitability", "Growth and Profitability"),
+    ("final_research_summary", "Final Research Summary"),
+)
+
+
+@dataclass(slots=True)
+class FullCompanyReportBundle:
+    """Fully assembled Sprint 6 report built from section modules only."""
+
+    ticker: str
+    benchmark_set_id: str | None
+    market_performance: MarketPerformanceSectionData
+    research_summary: ResearchSummarySectionData
+    trend_risk_profile: TrendRiskProfileSectionData
+    balance_sheet_strength: BalanceSheetStrengthSectionData
+    valuation: ValuationSectionData
+    peer_positioning: PeerPositioningSectionData
+    score_decomposition: ScoreDecompositionSectionData
+    growth_profitability: GrowthProfitabilitySectionData
+    final_research_summary: FinalResearchSummarySectionData
 
 
 def _format_percent(value: float | None, digits: int = 1) -> str:
@@ -432,6 +506,212 @@ def build_final_research_summary_text(packet: CompanyResearchPacket) -> str:
     return build_final_research_summary_text_from_data(section_data)
 
 
+def build_full_company_report_bundle(
+    ticker: str,
+    *,
+    benchmark_set_id: str | None = "sample_universe",
+    settings: AppSettings | None = None,
+) -> FullCompanyReportBundle:
+    """Build the full Sprint 6 report directly from shared section loaders."""
+
+    settings = settings or get_settings()
+    normalized_ticker = ticker.strip().upper()
+
+    return FullCompanyReportBundle(
+        ticker=normalized_ticker,
+        benchmark_set_id=benchmark_set_id,
+        market_performance=build_market_performance_section_data(
+            normalized_ticker,
+            benchmark_set_id=benchmark_set_id or "sample_universe",
+            settings=settings,
+        ),
+        research_summary=build_research_summary_section_data(
+            normalized_ticker,
+            benchmark_set_id=benchmark_set_id or "sample_universe",
+            settings=settings,
+        ),
+        trend_risk_profile=build_trend_risk_profile_section_data(
+            normalized_ticker,
+            benchmark_set_id=benchmark_set_id or "sample_universe",
+            settings=settings,
+        ),
+        balance_sheet_strength=build_balance_sheet_strength_section_data(
+            normalized_ticker,
+            benchmark_set_id=benchmark_set_id,
+            settings=settings,
+        ),
+        valuation=build_valuation_section_data(
+            normalized_ticker,
+            settings=settings,
+        ),
+        peer_positioning=build_peer_positioning_section_data(
+            normalized_ticker,
+            benchmark_set_id=benchmark_set_id,
+            settings=settings,
+        ),
+        score_decomposition=build_score_decomposition_section_data(
+            normalized_ticker,
+            benchmark_set_id=benchmark_set_id,
+            settings=settings,
+        ),
+        growth_profitability=build_growth_profitability_section_data(
+            normalized_ticker,
+            benchmark_set_id=benchmark_set_id,
+            settings=settings,
+        ),
+        final_research_summary=build_final_research_summary_section_data(
+            normalized_ticker,
+            benchmark_set_id=benchmark_set_id,
+            settings=settings,
+        ),
+    )
+
+
+def build_full_company_report_index(bundle: FullCompanyReportBundle) -> pd.DataFrame:
+    """Build a compact ordered section index for the assembled report."""
+
+    return pd.DataFrame(
+        [
+            {"section_key": section_key, "section_title": section_title, "ticker": bundle.ticker}
+            for section_key, section_title in FULL_REPORT_SECTION_ORDER
+        ]
+    )
+
+
+def save_full_company_report(
+    ticker: str,
+    *,
+    output_dir: str | Path,
+    benchmark_set_id: str | None = "sample_universe",
+    settings: AppSettings | None = None,
+) -> dict[str, Path]:
+    """Assemble and save the full Sprint 6 report from shared section modules."""
+
+    settings = settings or get_settings()
+    bundle = build_full_company_report_bundle(
+        ticker,
+        benchmark_set_id=benchmark_set_id,
+        settings=settings,
+    )
+
+    destination = Path(output_dir)
+    destination.mkdir(parents=True, exist_ok=True)
+    sections_dir = destination / "sections"
+    sections_dir.mkdir(parents=True, exist_ok=True)
+
+    section_artifacts: dict[str, dict[str, Path]] = {}
+    for section_key, _section_title in FULL_REPORT_SECTION_ORDER:
+        section_output_dir = sections_dir / section_key
+        if section_key == "market_performance":
+            section_artifacts[section_key] = save_market_performance_section(
+                bundle.ticker,
+                output_dir=section_output_dir,
+                benchmark_set_id=benchmark_set_id or "sample_universe",
+                settings=settings,
+            )
+        elif section_key == "research_summary":
+            section_artifacts[section_key] = save_research_summary_section(
+                bundle.ticker,
+                output_dir=section_output_dir,
+                benchmark_set_id=benchmark_set_id,
+                settings=settings,
+            )
+        elif section_key == "trend_risk_profile":
+            section_artifacts[section_key] = save_trend_risk_profile_section(
+                bundle.ticker,
+                output_dir=section_output_dir,
+                benchmark_set_id=benchmark_set_id or "sample_universe",
+                settings=settings,
+            )
+        elif section_key == "balance_sheet_strength":
+            section_artifacts[section_key] = save_balance_sheet_strength_section(
+                bundle.ticker,
+                output_dir=section_output_dir,
+                benchmark_set_id=benchmark_set_id,
+                settings=settings,
+            )
+        elif section_key == "valuation":
+            section_artifacts[section_key] = save_valuation_section(
+                bundle.ticker,
+                output_dir=section_output_dir,
+                settings=settings,
+            )
+        elif section_key == "peer_positioning":
+            section_artifacts[section_key] = save_peer_positioning_section(
+                bundle.ticker,
+                output_dir=section_output_dir,
+                benchmark_set_id=benchmark_set_id,
+                settings=settings,
+            )
+        elif section_key == "score_decomposition":
+            section_artifacts[section_key] = save_score_decomposition_section(
+                bundle.ticker,
+                output_dir=section_output_dir,
+                benchmark_set_id=benchmark_set_id,
+                settings=settings,
+            )
+        elif section_key == "growth_profitability":
+            section_artifacts[section_key] = save_growth_profitability_section(
+                bundle.ticker,
+                output_dir=section_output_dir,
+                benchmark_set_id=benchmark_set_id,
+                settings=settings,
+            )
+        elif section_key == "final_research_summary":
+            section_artifacts[section_key] = save_final_research_summary_section(
+                bundle.ticker,
+                output_dir=section_output_dir,
+                benchmark_set_id=benchmark_set_id,
+                settings=settings,
+            )
+
+    pdf_path = destination / f"{bundle.ticker.lower()}_full_report.pdf"
+    index_path = destination / f"{bundle.ticker.lower()}_full_report_index.csv"
+    summary_path = destination / f"{bundle.ticker.lower()}_full_report_summary.md"
+
+    section_figures = [
+        render_market_performance_section(bundle.market_performance),
+        render_research_summary_section(bundle.research_summary),
+        render_trend_risk_profile_section(bundle.trend_risk_profile),
+        render_balance_sheet_strength_section(bundle.balance_sheet_strength),
+        render_valuation_section(bundle.valuation),
+        render_peer_positioning_section(bundle.peer_positioning),
+        render_score_decomposition_section(bundle.score_decomposition),
+        render_growth_profitability_section(bundle.growth_profitability),
+        render_final_research_summary_section(bundle.final_research_summary),
+    ]
+    with PdfPages(pdf_path) as pdf:
+        for figure in section_figures:
+            pdf.savefig(figure, bbox_inches="tight")
+            plt.close(figure)
+
+    build_full_company_report_index(bundle).to_csv(index_path, index=False)
+    summary_path.write_text(
+        "\n".join(
+            [
+                f"# {bundle.ticker} Full Report",
+                "",
+                "Section order:",
+                *[f"- {section_title}" for _, section_title in FULL_REPORT_SECTION_ORDER],
+                "",
+                "Final memo:",
+                bundle.final_research_summary.final_memo_text,
+                "",
+                f"Primary benchmark: {bundle.market_performance.primary_benchmark}",
+                f"Secondary benchmark: {bundle.market_performance.secondary_benchmark or 'N/A'}",
+            ]
+        )
+        + "\n"
+    )
+
+    return {
+        "pdf_path": pdf_path,
+        "index_path": index_path,
+        "summary_path": summary_path,
+        "sections_dir": sections_dir,
+    }
+
+
 def render_score_summary_strip(packet: CompanyResearchPacket) -> Figure:
     """Render a compact horizontal score strip for total score and category pillars."""
 
@@ -698,10 +978,14 @@ __all__ = [
     "Axes",
     "Any",
     "Figure",
+    "FULL_REPORT_SECTION_ORDER",
+    "FullCompanyReportBundle",
     "build_balance_sheet_scorecard_table",
     "build_benchmark_comparison_table",
     "build_company_overview_table",
     "build_final_research_summary_text",
+    "build_full_company_report_bundle",
+    "build_full_company_report_index",
     "build_sector_snapshot_table",
     "build_peer_return_comparison_table",
     "build_peer_valuation_table",
@@ -724,4 +1008,5 @@ __all__ = [
     "render_scorecard_category_chart",
     "render_scorecard_metric_chart",
     "render_trailing_return_comparison_chart",
+    "save_full_company_report",
 ]

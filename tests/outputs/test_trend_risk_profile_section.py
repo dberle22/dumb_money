@@ -19,7 +19,7 @@ from dumb_money.outputs import (
     save_trend_risk_profile_section,
 )
 from dumb_money.research.company import CompanyResearchPacket
-from dumb_money.storage import write_canonical_table
+from dumb_money.storage import GOLD_TICKER_METRICS_MART_COLUMNS, write_canonical_table
 from dumb_money.transforms.prices import stage_prices
 
 
@@ -178,6 +178,91 @@ def test_trend_risk_profile_section_queries_duckdb_and_saves(tmp_path) -> None:
     assert artifacts["table_path"].exists()
     assert artifacts["strip_path"].exists()
     assert artifacts["text_path"].exists()
+
+
+def test_trend_risk_profile_section_prefers_mart_snapshot_metrics(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    settings.ensure_directories()
+
+    dates = pd.bdate_range("2024-01-02", periods=320)
+    write_canonical_table(
+        pd.concat(
+            [
+                _price_frame("AAPL", dates, base_price=100.0, slope=0.4),
+                _price_frame("SPY", dates, base_price=95.0, slope=0.22),
+                _price_frame("QQQ", dates, base_price=98.0, slope=0.3),
+            ],
+            ignore_index=True,
+        ),
+        "normalized_prices",
+        settings=settings,
+    )
+    write_canonical_table(
+        pd.DataFrame(
+            {
+                "set_id": ["sample_universe", "sample_universe"],
+                "benchmark_id": ["SPY", "QQQ"],
+                "ticker": ["SPY", "QQQ"],
+                "name": ["SPY", "QQQ"],
+                "category": ["market", "style"],
+                "scope": ["us_large_cap", "us_large_cap_growth"],
+                "currency": ["USD", "USD"],
+                "description": [None, None],
+                "member_order": [1, 2],
+                "is_default": [True, True],
+            }
+        ),
+        "benchmark_sets",
+        settings=settings,
+    )
+    write_canonical_table(
+        pd.DataFrame(
+            {
+                "mapping_id": ["benchmark_mapping::AAPL"],
+                "ticker": ["AAPL"],
+                "sector": ["Technology"],
+                "industry": ["Consumer Electronics"],
+                "primary_benchmark": ["SPY"],
+                "sector_benchmark": ["QQQ"],
+                "industry_benchmark": [None],
+                "style_benchmark": [None],
+                "custom_benchmark": [None],
+                "assignment_method": ["test_fixture"],
+                "priority": [1],
+                "is_active": [True],
+                "notes": [None],
+            }
+        ),
+        "benchmark_mappings",
+        settings=settings,
+    )
+    mart_row = {column: None for column in GOLD_TICKER_METRICS_MART_COLUMNS}
+    mart_row.update(
+        {
+            "mart_id": "gold_ticker_metrics::AAPL::2025-01-15",
+            "ticker": "AAPL",
+            "score_date": "2025-01-15",
+            "primary_benchmark": "SPY",
+            "secondary_benchmark": "QQQ",
+            "annualized_volatility_1y": 0.44,
+            "downside_volatility_1y": 0.31,
+            "beta_1y": 1.33,
+            "current_drawdown": -0.17,
+            "max_drawdown_1y": -0.29,
+            "price_vs_sma_50": -0.04,
+            "price_vs_sma_200": -0.12,
+            "sma_50_above_sma_200": False,
+        }
+    )
+    write_canonical_table(pd.DataFrame([mart_row]), "gold_ticker_metrics_mart", settings=settings)
+
+    data = build_trend_risk_profile_section_data("AAPL", benchmark_set_id="sample_universe", settings=settings)
+
+    assert data.primary_benchmark == "SPY"
+    assert data.secondary_benchmark == "QQQ"
+    assert data.summary_table.loc[data.summary_table["Metric"] == "1Y Volatility", "Value"].iloc[0] == "44.0%"
+    assert data.summary_table.loc[data.summary_table["Metric"] == "Beta vs Primary Benchmark", "Value"].iloc[0] == "1.33"
+    assert data.summary_table.loc[data.summary_table["Metric"] == "Price vs 200D MA", "Value"].iloc[0] == "-12.0%"
 
 
 def test_company_report_risk_table_delegates_to_trend_risk_section() -> None:

@@ -8,6 +8,7 @@ import pandas as pd
 matplotlib.use("Agg")
 
 from dumb_money.analytics.scorecard import CompanyScorecard
+from dumb_money.config import AppSettings
 from dumb_money.outputs import (
     build_final_research_summary_section_data,
     build_final_research_summary_text,
@@ -19,6 +20,11 @@ from dumb_money.outputs.final_research_summary_section import (
     build_final_research_summary_table,
 )
 from dumb_money.research.company import CompanyResearchPacket
+from dumb_money.storage import (
+    GOLD_SCORECARD_METRIC_ROWS_COLUMNS,
+    GOLD_TICKER_METRICS_MART_COLUMNS,
+    write_canonical_table,
+)
 
 
 def _history_frame(ticker: str, start_price: float) -> pd.DataFrame:
@@ -344,3 +350,244 @@ def test_final_research_summary_section_builds_from_aapl_and_saves(tmp_path) -> 
     assert artifacts["figure_path"].exists()
     assert artifacts["table_path"].exists()
     assert artifacts["text_path"].exists()
+
+
+def test_final_research_summary_section_uses_gold_score_artifact_when_available(tmp_path, monkeypatch) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    settings.ensure_directories()
+
+    dates = pd.bdate_range("2025-01-02", periods=260)
+    prices = pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "ticker": ticker,
+                    "date": dates.date,
+                    "interval": "1d",
+                    "source": "fixture",
+                    "currency": "USD",
+                    "open": values,
+                    "high": [value * 1.01 for value in values],
+                    "low": [value * 0.99 for value in values],
+                    "close": values,
+                    "adj_close": values,
+                    "volume": [1_000_000] * len(values),
+                }
+            )
+            for ticker, values in {
+                "AAPL": [100.0 + (idx * 0.45) for idx in range(len(dates))],
+                "SPY": [95.0 + (idx * 0.20) for idx in range(len(dates))],
+                "QQQ": [98.0 + (idx * 0.28) for idx in range(len(dates))],
+            }.items()
+        ],
+        ignore_index=True,
+    )
+    write_canonical_table(prices, "normalized_prices", settings=settings)
+
+    fundamentals = pd.DataFrame(
+        [
+            {
+                "ticker": "AAPL",
+                "as_of_date": "2025-12-31",
+                "period_end_date": "2025-12-31",
+                "report_date": "2026-01-30",
+                "fiscal_year": 2025,
+                "fiscal_quarter": 4,
+                "fiscal_period": "TTM",
+                "period_type": "ttm",
+                "source": "fixture",
+                "currency": "USD",
+                "long_name": "Apple Inc.",
+                "sector": "Technology",
+                "industry": "Consumer Electronics",
+                "market_cap": 1000.0,
+                "enterprise_value": 1100.0,
+                "revenue": 500.0,
+                "revenue_ttm": 500.0,
+                "gross_profit": 220.0,
+                "operating_income": 150.0,
+                "net_income": 120.0,
+                "ebitda": 170.0,
+                "free_cash_flow": 100.0,
+                "total_debt": 90.0,
+                "total_cash": 60.0,
+                "current_assets": 140.0,
+                "current_liabilities": 95.0,
+                "shares_outstanding": 10.0,
+                "gross_margin": 0.44,
+                "operating_margin": 0.30,
+                "profit_margin": 0.24,
+                "return_on_equity": 0.28,
+                "return_on_assets": 0.12,
+                "debt_to_equity": 1.2,
+                "current_ratio": 1.47,
+                "trailing_pe": 30.0,
+                "forward_pe": 28.0,
+                "price_to_sales": 7.4,
+                "ev_to_ebitda": 18.0,
+                "dividend_yield": 0.005,
+                "raw_payload_path": "fixture",
+                "pulled_at": "2026-01-31T00:00:00Z",
+            }
+        ]
+    )
+    write_canonical_table(fundamentals, "normalized_fundamentals", settings=settings)
+    write_canonical_table(
+        pd.DataFrame(
+            {
+                "mapping_id": ["benchmark_mapping::AAPL"],
+                "ticker": ["AAPL"],
+                "sector": ["Technology"],
+                "industry": ["Consumer Electronics"],
+                "primary_benchmark": ["SPY"],
+                "sector_benchmark": ["QQQ"],
+                "industry_benchmark": [None],
+                "style_benchmark": [None],
+                "custom_benchmark": [None],
+                "assignment_method": ["fixture"],
+                "priority": [1],
+                "is_active": [True],
+                "notes": [None],
+            }
+        ),
+        "benchmark_mappings",
+        settings=settings,
+    )
+    write_canonical_table(
+        pd.DataFrame(
+            {
+                "set_id": ["sample_universe", "sample_universe"],
+                "benchmark_id": ["SPY", "QQQ"],
+                "ticker": ["SPY", "QQQ"],
+                "name": ["SPY", "QQQ"],
+                "category": ["market", "style"],
+                "scope": ["us_large_cap", "us_large_cap_growth"],
+                "currency": ["USD", "USD"],
+                "description": [None, None],
+                "member_order": [1, 2],
+                "is_default": [True, True],
+            }
+        ),
+        "benchmark_sets",
+        settings=settings,
+    )
+    write_canonical_table(
+        pd.DataFrame(columns=["peer_set_id", "ticker", "peer_ticker", "peer_source", "relationship_type", "sector", "industry", "selection_method", "peer_order"]),
+        "peer_sets",
+        settings=settings,
+    )
+
+    mart_row = {column: None for column in GOLD_TICKER_METRICS_MART_COLUMNS}
+    mart_row.update(
+        {
+            "mart_id": "gold_ticker_metrics::AAPL::2026-01-15",
+            "ticker": "AAPL",
+            "as_of_date": "2025-12-31",
+            "score_date": "2026-01-15",
+            "company_name": "Apple Mart Name",
+            "sector": "Technology",
+            "industry": "Consumer Electronics",
+            "primary_benchmark": "SPY",
+            "secondary_benchmark": "QQQ",
+            "market_cap": 1000.0,
+            "free_cash_flow": 100.0,
+            "ebitda": 170.0,
+            "gross_margin": 0.44,
+            "operating_margin": 0.30,
+            "free_cash_flow_margin": 0.20,
+            "return_on_equity": 0.28,
+            "return_on_assets": 0.12,
+            "current_ratio": 1.47,
+            "debt_to_equity": 1.2,
+            "total_cash": 60.0,
+            "total_debt": 90.0,
+            "forward_pe": 28.0,
+            "ev_to_ebitda": 18.0,
+            "price_to_sales": 7.4,
+            "return_1y": 0.22,
+            "primary_benchmark_return_1y": 0.14,
+            "secondary_benchmark_return_1y": 0.18,
+            "excess_return_primary_1y": 0.08,
+            "excess_return_secondary_1y": 0.04,
+            "annualized_volatility_1y": 0.24,
+            "downside_volatility_1y": 0.16,
+            "beta_1y": 1.05,
+            "current_drawdown": -0.08,
+            "max_drawdown_1y": -0.23,
+            "price_vs_sma_50": 0.04,
+            "price_vs_sma_200": 0.11,
+            "sma_50_above_sma_200": True,
+            "total_score": 72.0,
+            "confidence_score": 0.96,
+            "market_performance_score": 18.0,
+            "market_performance_available_weight": 25.0,
+            "growth_profitability_score": 30.0,
+            "growth_profitability_available_weight": 35.0,
+            "balance_sheet_score": 16.0,
+            "balance_sheet_available_weight": 25.0,
+            "valuation_score": 8.0,
+            "valuation_available_weight": 15.0,
+        }
+    )
+    write_canonical_table(pd.DataFrame([mart_row]), "gold_ticker_metrics_mart", settings=settings)
+
+    metric_rows = pd.DataFrame(
+        [
+            {
+                "scorecard_metric_row_id": "gold_scorecard_metric::AAPL::2026-01-15::operating_margin",
+                "ticker": "AAPL",
+                "score_date": "2026-01-15",
+                "metric_id": "operating_margin",
+                "category": "Growth and Profitability",
+                "metric_name": "Operating margin",
+                "raw_value": 0.30,
+                "normalized_value": 1.0,
+                "scoring_method": "threshold",
+                "metric_score": 8.0,
+                "metric_weight": 8.0,
+                "metric_available": True,
+                "metric_applicable": True,
+                "confidence_flag": "ok",
+                "notes": "Latest normalized fundamentals snapshot.",
+                "company_name": "Apple Mart Name",
+                "sector": "Technology",
+                "industry": "Consumer Electronics",
+                "primary_benchmark": "SPY",
+                "secondary_benchmark": "QQQ",
+            },
+            {
+                "scorecard_metric_row_id": "gold_scorecard_metric::AAPL::2026-01-15::forward_pe",
+                "ticker": "AAPL",
+                "score_date": "2026-01-15",
+                "metric_id": "forward_pe",
+                "category": "Valuation",
+                "metric_name": "Forward P/E",
+                "raw_value": 28.0,
+                "normalized_value": 0.25,
+                "scoring_method": "peer_relative",
+                "metric_score": 1.25,
+                "metric_weight": 5.0,
+                "metric_available": True,
+                "metric_applicable": True,
+                "confidence_flag": "ok",
+                "notes": "Peer-relative scoring versus peer median 24.00x.",
+                "company_name": "Apple Mart Name",
+                "sector": "Technology",
+                "industry": "Consumer Electronics",
+                "primary_benchmark": "SPY",
+                "secondary_benchmark": "QQQ",
+            },
+        ]
+    ).reindex(columns=GOLD_SCORECARD_METRIC_ROWS_COLUMNS)
+    write_canonical_table(metric_rows, "gold_scorecard_metric_rows", settings=settings)
+
+    monkeypatch.setattr(
+        "dumb_money.outputs.final_research_summary_section.build_company_scorecard",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("fallback scorecard builder should not be used")),
+    )
+
+    data = build_final_research_summary_section_data("AAPL", benchmark_set_id="sample_universe", settings=settings)
+
+    assert data.ticker == "AAPL"
+    assert data.report_date == "2026-01-15"
+    assert data.final_memo_text

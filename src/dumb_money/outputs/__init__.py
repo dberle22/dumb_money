@@ -9,10 +9,14 @@ from dumb_money.outputs.balance_sheet_strength_section import (
     save_balance_sheet_strength_section,
 )
 from dumb_money.outputs.company_report import (
+    FULL_REPORT_SECTION_ORDER,
+    FullCompanyReportBundle,
     build_balance_sheet_scorecard_table,
     build_benchmark_comparison_table,
     build_company_overview_table,
     build_final_research_summary_text,
+    build_full_company_report_bundle,
+    build_full_company_report_index,
     build_peer_return_comparison_table,
     build_peer_valuation_table,
     build_sector_snapshot_table,
@@ -35,6 +39,7 @@ from dumb_money.outputs.company_report import (
     render_scorecard_category_chart,
     render_scorecard_metric_chart,
     render_trailing_return_comparison_chart,
+    save_full_company_report,
 )
 from dumb_money.outputs.final_research_summary_section import (
     FinalResearchSummarySectionData,
@@ -43,6 +48,16 @@ from dumb_money.outputs.final_research_summary_section import (
     build_final_research_summary_text_from_data,
     render_final_research_summary_section,
     save_final_research_summary_section,
+)
+from dumb_money.outputs.growth_profitability_section import (
+    GrowthProfitabilitySectionData,
+    build_growth_profitability_growth_table,
+    build_growth_profitability_margin_table,
+    build_growth_profitability_return_on_capital_table,
+    build_growth_profitability_section_data,
+    build_growth_profitability_text_from_data,
+    render_growth_profitability_section,
+    save_growth_profitability_section,
 )
 from dumb_money.outputs.market_performance_section import (
     MarketPerformanceSectionData,
@@ -99,6 +114,8 @@ from dumb_money.outputs.valuation_section import (
 
 __all__ = [
     "build_balance_sheet_scorecard_table",
+    "build_full_company_report_bundle",
+    "build_full_company_report_index",
     "BalanceSheetStrengthSectionData",
     "build_benchmark_comparison_table",
     "build_balance_sheet_strength_section_data",
@@ -107,6 +124,9 @@ __all__ = [
     "build_company_overview_table",
     "build_final_research_summary_text",
     "FinalResearchSummarySectionData",
+    "FULL_REPORT_SECTION_ORDER",
+    "FullCompanyReportBundle",
+    "GrowthProfitabilitySectionData",
     "MarketPerformanceSectionData",
     "PeerPositioningSectionData",
     "ResearchSummarySectionData",
@@ -116,6 +136,11 @@ __all__ = [
     "build_final_research_summary_section_data",
     "build_final_research_summary_table",
     "build_final_research_summary_text_from_data",
+    "build_growth_profitability_growth_table",
+    "build_growth_profitability_margin_table",
+    "build_growth_profitability_return_on_capital_table",
+    "build_growth_profitability_section_data",
+    "build_growth_profitability_text_from_data",
     "build_market_performance_section_data",
     "build_market_performance_table",
     "build_peer_positioning_ranking_panel",
@@ -154,6 +179,7 @@ __all__ = [
     "render_balance_sheet_strength_section",
     "render_drawdown_chart",
     "render_final_research_summary_section",
+    "render_growth_profitability_section",
     "render_indexed_price_performance_chart",
     "render_price_with_moving_averages_chart",
     "render_market_performance_section",
@@ -170,6 +196,8 @@ __all__ = [
     "resolve_research_summary_label",
     "save_balance_sheet_strength_section",
     "save_final_research_summary_section",
+    "save_full_company_report",
+    "save_growth_profitability_section",
     "save_market_performance_section",
     "save_peer_positioning_section",
     "save_research_summary_section",

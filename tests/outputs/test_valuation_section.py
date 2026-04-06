@@ -8,6 +8,7 @@ import pandas as pd
 matplotlib.use("Agg")
 
 from dumb_money.analytics.scorecard import CompanyScorecard, build_company_scorecard
+from dumb_money.config import AppSettings
 from dumb_money.outputs import (
     build_valuation_section_data,
     render_valuation_section,
@@ -19,6 +20,7 @@ from dumb_money.outputs.valuation_section import (
     build_valuation_summary_table,
 )
 from dumb_money.research.company import CompanyResearchPacket
+from dumb_money.storage import GOLD_TICKER_METRICS_MART_COLUMNS, write_canonical_table
 
 
 def _build_packet_from_scorecard(
@@ -225,3 +227,109 @@ def test_valuation_section_builds_from_aapl_and_saves(tmp_path) -> None:
     assert artifacts["strip_path"].exists()
     assert artifacts["peer_table_path"].exists()
     assert artifacts["text_path"].exists()
+
+
+def test_valuation_section_prefers_mart_peer_summary_snapshot(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    settings.ensure_directories()
+
+    fundamentals = pd.DataFrame(
+        [
+            {
+                "ticker": "AAPL",
+                "as_of_date": "2024-12-31",
+                "period_end_date": "2024-12-31",
+                "fiscal_period": "TTM",
+                "period_type": "ttm",
+                "long_name": "Apple Fundamentals Name",
+                "sector": "Technology",
+                "industry": "Consumer Electronics",
+                "market_cap": 1_000.0,
+                "free_cash_flow": 60.0,
+                "gross_profit": 42.0,
+                "operating_income": 31.0,
+                "net_income": 24.0,
+                "shares_outstanding": 10.0,
+                "forward_pe": 18.0,
+                "ev_to_ebitda": 12.0,
+                "price_to_sales": 3.5,
+                "gross_margin": 0.42,
+                "operating_margin": 0.31,
+                "return_on_equity": 0.28,
+                "return_on_assets": 0.12,
+            },
+            {
+                "ticker": "MSFT",
+                "as_of_date": "2024-12-31",
+                "period_end_date": "2024-12-31",
+                "fiscal_period": "TTM",
+                "period_type": "ttm",
+                "long_name": "Microsoft Corp.",
+                "sector": "Technology",
+                "industry": "Software",
+                "market_cap": 1_200.0,
+                "free_cash_flow": 36.0,
+                "gross_profit": 50.0,
+                "operating_income": 35.0,
+                "net_income": 27.0,
+                "shares_outstanding": 8.0,
+                "forward_pe": 22.0,
+                "ev_to_ebitda": 14.0,
+                "price_to_sales": 4.0,
+                "gross_margin": 0.50,
+                "operating_margin": 0.35,
+                "return_on_equity": 0.30,
+                "return_on_assets": 0.14,
+            },
+        ]
+    )
+    write_canonical_table(fundamentals, "normalized_fundamentals", settings=settings)
+    write_canonical_table(
+        pd.DataFrame(
+            {
+                "peer_set_id": ["peer_set::AAPL"],
+                "ticker": ["AAPL"],
+                "peer_ticker": ["MSFT"],
+                "peer_source": ["automatic"],
+                "relationship_type": ["sector"],
+                "sector": ["Technology"],
+                "industry": ["Consumer Electronics"],
+                "selection_method": ["sector_market_cap_proximity"],
+                "peer_order": [1],
+            }
+        ),
+        "peer_sets",
+        settings=settings,
+    )
+
+    mart_row = {column: None for column in GOLD_TICKER_METRICS_MART_COLUMNS}
+    mart_row.update(
+        {
+            "mart_id": "gold_ticker_metrics::AAPL::2025-01-15",
+            "ticker": "AAPL",
+            "as_of_date": "2024-12-31",
+            "score_date": "2025-01-15",
+            "company_name": "Apple Mart Name",
+            "sector": "Technology",
+            "industry": "Consumer Electronics",
+            "market_cap": 1_000.0,
+            "free_cash_flow": 60.0,
+            "forward_pe": 18.0,
+            "ev_to_ebitda": 12.0,
+            "price_to_sales": 3.5,
+            "dividend_yield": 0.01,
+            "peer_count": 1,
+            "peer_median_forward_pe": 17.0,
+            "peer_median_ev_to_ebitda": 11.0,
+            "peer_median_price_to_sales": 3.0,
+            "peer_median_free_cash_flow_yield": 0.03,
+        }
+    )
+    write_canonical_table(pd.DataFrame([mart_row]), "gold_ticker_metrics_mart", settings=settings)
+
+    data = build_valuation_section_data("AAPL", settings=settings)
+    table = build_valuation_summary_table(data)
+
+    assert data.company_name == "Apple Mart Name"
+    assert data.report_date == "2025-01-15"
+    assert table.loc[table["Metric"] == "Forward P/E", "Peer Median"].iloc[0] == "17.00x"

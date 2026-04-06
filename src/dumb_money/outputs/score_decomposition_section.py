@@ -11,28 +11,16 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.figure import Figure
 
-from dumb_money.analytics.company import (
-    build_benchmark_comparison,
-    build_fundamentals_summary,
-    build_peer_summary_stats,
-    build_peer_valuation_comparison,
-    calculate_risk_metrics,
-    calculate_trend_metrics,
-    prepare_price_history,
-)
-from dumb_money.analytics.scorecard import build_company_scorecard
 from dumb_money.analytics.scorecard import CATEGORY_TARGET_WEIGHTS
 from dumb_money.config import AppSettings, get_settings
 from dumb_money.research.company import (
     CompanyResearchPacket,
-    load_benchmark_mappings,
-    load_benchmark_prices,
-    load_benchmark_set,
-    load_peer_sets,
-    load_security_master,
-    load_staged_fundamentals,
-    load_staged_prices,
+    build_company_scorecard_from_gold_artifacts,
+    build_fundamentals_summary_from_mart_row,
+    load_gold_scorecard_metric_rows_for_ticker,
+    load_gold_ticker_metrics_row,
 )
+from dumb_money.transforms.scorecard_metric_rows_mart import stage_gold_scorecard_metric_rows
 
 CATEGORY_TABLE_COLUMNS = [
     "Category",
@@ -494,103 +482,50 @@ def build_score_decomposition_section_data(
     benchmark_set_id: str | None = None,
     settings: AppSettings | None = None,
 ) -> ScoreDecompositionSectionData:
-    """Build the Score Decomposition section from canonical shared inputs."""
+    """Build the Score Decomposition section from canonical gold score artifacts."""
 
     settings = settings or get_settings()
     normalized_ticker = ticker.strip().upper()
-
-    prices = load_staged_prices(settings=settings)
-    fundamentals = load_staged_fundamentals(settings=settings)
-    security_master = load_security_master(settings=settings)
-    benchmark_mappings = load_benchmark_mappings(settings=settings)
-    benchmark_set = load_benchmark_set(settings=settings, set_id=benchmark_set_id)
-    benchmark_prices = load_benchmark_prices(settings=settings)
-    peer_sets = load_peer_sets(settings=settings)
-
-    company_history = prepare_price_history(prices, normalized_ticker)
-    if company_history.empty:
-        raise ValueError(f"no staged price history found for ticker {normalized_ticker}")
-
-    fundamentals_summary = build_fundamentals_summary(fundamentals, normalized_ticker)
-    security_rows = (
-        security_master.loc[security_master["ticker"] == normalized_ticker].copy()
-        if "ticker" in security_master.columns
-        else pd.DataFrame()
-    )
-    benchmark_mapping_rows = (
-        benchmark_mappings.loc[benchmark_mappings["ticker"] == normalized_ticker].copy()
-        if "ticker" in benchmark_mappings.columns
-        else pd.DataFrame()
-    )
-    security_row = security_rows.iloc[-1].to_dict() if not security_rows.empty else {}
-    benchmark_mapping_row = benchmark_mapping_rows.iloc[-1].to_dict() if not benchmark_mapping_rows.empty else {}
-
-    benchmark_histories = {
-        benchmark_ticker: prepare_price_history(benchmark_prices, benchmark_ticker)
-        for benchmark_ticker in benchmark_set.get("ticker", pd.Series(dtype=str)).tolist()
-    }
-    benchmark_histories = {
-        benchmark_ticker: history
-        for benchmark_ticker, history in benchmark_histories.items()
-        if not history.empty
-    }
-    resolved_primary_benchmark = benchmark_mapping_row.get("primary_benchmark")
-    if not resolved_primary_benchmark and benchmark_histories:
-        resolved_primary_benchmark = next(iter(benchmark_histories))
-    primary_benchmark_history = benchmark_histories.get(resolved_primary_benchmark) if resolved_primary_benchmark else None
-
-    benchmark_comparison = build_benchmark_comparison(company_history, benchmark_histories)
-    risk_metrics = calculate_risk_metrics(company_history, benchmark_history=primary_benchmark_history)
-    trend_metrics = calculate_trend_metrics(company_history)
-
-    peer_rows = (
-        peer_sets.loc[peer_sets["ticker"] == normalized_ticker].copy()
-        if "ticker" in peer_sets.columns
-        else pd.DataFrame()
-    )
-    peer_valuation_comparison = build_peer_valuation_comparison(
+    mart_row = load_gold_ticker_metrics_row(normalized_ticker, settings=settings)
+    metric_rows = load_gold_scorecard_metric_rows_for_ticker(
         normalized_ticker,
-        peer_rows,
-        fundamentals,
+        score_date=mart_row.get("score_date") if mart_row else None,
+        settings=settings,
     )
-    peer_summary_stats = build_peer_summary_stats(peer_valuation_comparison)
+    if not mart_row or metric_rows.empty:
+        stage_gold_scorecard_metric_rows(settings=settings, tickers=[normalized_ticker])
+        mart_row = load_gold_ticker_metrics_row(normalized_ticker, settings=settings)
+        metric_rows = load_gold_scorecard_metric_rows_for_ticker(
+            normalized_ticker,
+            score_date=mart_row.get("score_date") if mart_row else None,
+            settings=settings,
+        )
+    if not mart_row or metric_rows.empty:
+        raise ValueError(f"no gold scorecard artifacts found for ticker {normalized_ticker}")
 
-    scorecard = build_company_scorecard(
+    fundamentals_summary = build_fundamentals_summary_from_mart_row(mart_row)
+    scorecard = build_company_scorecard_from_gold_artifacts(
         ticker=normalized_ticker,
-        company_name=fundamentals_summary.get("long_name"),
-        sector=fundamentals_summary.get("sector") or security_row.get("sector"),
-        industry=fundamentals_summary.get("industry") or security_row.get("industry"),
-        score_date=fundamentals_summary.get("as_of_date"),
-        benchmark_comparison=benchmark_comparison,
-        risk_metrics=risk_metrics,
-        trend_metrics=trend_metrics,
-        fundamentals_summary=fundamentals_summary,
-        peer_valuation_comparison=peer_valuation_comparison,
-        primary_benchmark=resolved_primary_benchmark,
-        secondary_benchmark=(
-            benchmark_mapping_row.get("sector_benchmark")
-            or benchmark_mapping_row.get("style_benchmark")
-            or benchmark_mapping_row.get("industry_benchmark")
-            or benchmark_mapping_row.get("custom_benchmark")
-        ),
+        mart_row=mart_row,
+        metric_rows=metric_rows,
     )
 
     packet = CompanyResearchPacket(
         ticker=normalized_ticker,
-        company_name=fundamentals_summary.get("long_name"),
+        company_name=mart_row.get("company_name") or fundamentals_summary.get("long_name"),
         as_of_date=fundamentals_summary.get("as_of_date"),
-        company_history=company_history,
-        benchmark_histories=benchmark_histories,
+        company_history=pd.DataFrame(),
+        benchmark_histories={},
         return_windows=pd.DataFrame(),
         trailing_return_comparison=pd.DataFrame(),
-        risk_metrics=risk_metrics,
-        trend_metrics=trend_metrics,
-        benchmark_comparison=benchmark_comparison,
+        risk_metrics={},
+        trend_metrics={},
+        benchmark_comparison=pd.DataFrame(),
         fundamentals_summary=fundamentals_summary,
         peer_return_comparison=pd.DataFrame(),
         peer_return_summary_stats={},
-        peer_valuation_comparison=peer_valuation_comparison,
-        peer_summary_stats=peer_summary_stats,
+        peer_valuation_comparison=pd.DataFrame(),
+        peer_summary_stats={},
         sector_snapshot={},
         scorecard=scorecard,
     )

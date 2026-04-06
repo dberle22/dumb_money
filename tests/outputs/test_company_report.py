@@ -8,9 +8,12 @@ import matplotlib
 matplotlib.use("Agg")
 
 from dumb_money.outputs import (
+    FULL_REPORT_SECTION_ORDER,
     build_balance_sheet_scorecard_table,
     build_company_overview_table,
     build_final_research_summary_text,
+    build_full_company_report_bundle,
+    build_full_company_report_index,
     build_peer_return_comparison_table,
     build_peer_valuation_table,
     build_research_summary_table,
@@ -30,6 +33,7 @@ from dumb_money.outputs import (
     render_scorecard_category_chart,
     render_scorecard_metric_chart,
     render_trailing_return_comparison_chart,
+    save_full_company_report,
 )
 from dumb_money.research import build_company_research_packet
 
@@ -103,6 +107,28 @@ def test_company_research_notebook_exists_and_uses_shared_modules() -> None:
     assert "render_indexed_price_performance_chart" in joined
     assert "render_drawdown_chart" in joined
     assert "render_score_decomposition_chart" in joined
+
+
+def test_full_company_report_bundle_and_artifacts_build_from_aapl(tmp_path) -> None:
+    bundle = build_full_company_report_bundle("AAPL", benchmark_set_id="sample_universe")
+    index = build_full_company_report_index(bundle)
+    artifacts = save_full_company_report(
+        "AAPL",
+        benchmark_set_id="sample_universe",
+        output_dir=Path(tmp_path) / "full_report",
+    )
+
+    assert bundle.ticker == "AAPL"
+    assert index["section_title"].tolist() == [title for _, title in FULL_REPORT_SECTION_ORDER]
+    assert artifacts["pdf_path"].exists()
+    assert artifacts["index_path"].exists()
+    assert artifacts["summary_path"].exists()
+    assert (artifacts["sections_dir"] / "market_performance").exists()
+    assert (artifacts["sections_dir"] / "final_research_summary").exists()
+
+    summary_text = artifacts["summary_path"].read_text()
+    assert "Section order:" in summary_text
+    assert "Final memo:" in summary_text
 
 
 def test_sector_research_notebook_exists_and_uses_shared_modules() -> None:

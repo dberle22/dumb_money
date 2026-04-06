@@ -260,6 +260,139 @@ def test_write_and_read_peer_sets_round_trip(tmp_path) -> None:
     assert_frame_equal(loaded, peer_sets, check_dtype=False)
 
 
+def test_write_and_read_gold_ticker_metrics_mart_round_trip(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    mart = pd.DataFrame(
+        {
+            "mart_id": ["gold_ticker_metrics::AAPL::2024-12-31"],
+            "ticker": ["AAPL"],
+            "as_of_date": ["2024-12-31"],
+            "score_date": ["2024-12-31"],
+            "company_name": ["Apple Inc."],
+            "sector": ["Technology"],
+            "industry": ["Consumer Electronics"],
+            "currency": ["USD"],
+            "primary_benchmark": ["QQQ"],
+            "secondary_benchmark": ["SPY"],
+            "sector_benchmark": ["SPY"],
+            "industry_benchmark": [None],
+            "style_benchmark": [None],
+            "custom_benchmark": [None],
+            "market_cap": [3_000_000_000_000.0],
+            "enterprise_value": [3_100_000_000_000.0],
+            "revenue_ttm": [381_000_000_000.0],
+            "ebitda": [131_000_000_000.0],
+            "free_cash_flow": [103_000_000_000.0],
+            "gross_margin": [0.449],
+            "operating_margin": [0.310],
+            "profit_margin": [0.248],
+            "free_cash_flow_margin": [0.270],
+            "return_on_equity": [1.52],
+            "return_on_assets": [0.24],
+            "return_on_invested_capital": [0.556],
+            "current_ratio": [1.47],
+            "debt_to_equity": [1.7],
+            "total_cash": [62_000_000_000.0],
+            "total_debt": [108_000_000_000.0],
+            "net_cash": [-46_000_000_000.0],
+            "trailing_pe": [31.0],
+            "forward_pe": [28.0],
+            "ev_to_ebitda": [18.1],
+            "price_to_sales": [7.4],
+            "dividend_yield": [0.005],
+            "return_1m": [0.04],
+            "return_3m": [0.11],
+            "return_6m": [0.19],
+            "return_1y": [0.32],
+            "primary_benchmark_return_1y": [0.26],
+            "secondary_benchmark_return_1y": [0.21],
+            "excess_return_primary_1y": [0.06],
+            "excess_return_secondary_1y": [0.11],
+            "annualized_volatility_1m": [0.18],
+            "annualized_volatility_3m": [0.17],
+            "annualized_volatility_1y": [0.19],
+            "downside_volatility_1y": [0.10],
+            "beta_1y": [1.05],
+            "current_drawdown": [-0.02],
+            "max_drawdown": [-0.11],
+            "max_drawdown_1y": [-0.08],
+            "sma_50": [220.0],
+            "sma_200": [200.0],
+            "price_vs_sma_50": [0.03],
+            "price_vs_sma_200": [0.13],
+            "sma_50_above_sma_200": [True],
+            "peer_count": [2],
+            "peer_median_forward_pe": [22.5],
+            "peer_median_ev_to_ebitda": [17.3],
+            "peer_median_price_to_sales": [5.95],
+            "peer_median_free_cash_flow_yield": [0.043],
+            "peer_median_market_cap": [1_440_000_000_000.0],
+            "selected_history_period_type": ["quarterly"],
+            "selected_history_period_count": [4],
+            "latest_period_end_date": ["2024-12-31"],
+            "latest_revenue_growth": [0.03],
+            "latest_eps_growth": [0.06],
+            "latest_gross_margin_value": [0.452],
+            "latest_operating_margin_value": [0.318],
+            "latest_free_cash_flow_margin": [0.28],
+            "total_score": [74.5],
+            "confidence_score": [0.96],
+            "market_performance_score": [18.0],
+            "market_performance_available_weight": [25.0],
+            "growth_profitability_score": [28.0],
+            "growth_profitability_available_weight": [35.0],
+            "balance_sheet_score": [17.5],
+            "balance_sheet_available_weight": [25.0],
+            "valuation_score": [11.0],
+            "valuation_available_weight": [15.0],
+            "sector_company_count": [3],
+            "sector_median_return_6m": [0.17],
+            "sector_median_return_1y": [0.29],
+            "sector_median_forward_pe": [28.0],
+            "sector_median_ev_to_ebitda": [18.1],
+            "sector_median_price_to_sales": [7.4],
+        }
+    )
+
+    write_canonical_table(mart, "gold_ticker_metrics_mart", settings=settings)
+    loaded = read_canonical_table("gold_ticker_metrics_mart", settings=settings)
+
+    assert_frame_equal(loaded, mart, check_dtype=False)
+
+
+def test_write_and_read_gold_scorecard_metric_rows_round_trip(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    metric_rows = pd.DataFrame(
+        {
+            "scorecard_metric_row_id": ["gold_scorecard_metric::AAPL::2024-12-31::forward_pe"],
+            "ticker": ["AAPL"],
+            "score_date": ["2024-12-31"],
+            "metric_id": ["forward_pe"],
+            "category": ["Valuation"],
+            "metric_name": ["Forward P/E"],
+            "raw_value": [28.0],
+            "normalized_value": [0.75],
+            "scoring_method": ["peer_relative"],
+            "metric_score": [3.75],
+            "metric_weight": [5.0],
+            "metric_available": [True],
+            "metric_applicable": [True],
+            "confidence_flag": ["ok"],
+            "notes": ["Peer-relative scoring versus peer median 22.00x."],
+            "company_name": ["Apple Inc."],
+            "sector": ["Technology"],
+            "industry": ["Consumer Electronics"],
+            "primary_benchmark": ["QQQ"],
+            "secondary_benchmark": ["SPY"],
+        }
+    )
+
+    write_canonical_table(metric_rows, "gold_scorecard_metric_rows", settings=settings)
+    loaded = read_canonical_table("gold_scorecard_metric_rows", settings=settings)
+
+    assert_frame_equal(loaded, metric_rows, check_dtype=False)
+
+
 def test_write_and_read_sector_snapshots_round_trip(tmp_path) -> None:
     settings = AppSettings(project_root=tmp_path)
     sector_snapshots = pd.DataFrame(

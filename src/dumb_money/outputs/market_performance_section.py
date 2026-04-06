@@ -21,6 +21,7 @@ from dumb_money.analytics.scorecard import resolve_secondary_benchmark
 from dumb_money.config import AppSettings, get_settings
 from dumb_money.storage import query_canonical_data, warehouse_table_exists
 from dumb_money.transforms.benchmark_sets import stage_benchmark_sets
+from dumb_money.research.company import load_gold_ticker_metrics_row
 
 SECTION_WINDOWS: tuple[str, ...] = ("1m", "3m", "6m", "1y")
 SERIES_COLORS: dict[str, str] = {
@@ -153,11 +154,17 @@ def build_market_performance_section_data(
         settings=settings,
     )
 
+    mart_row = load_gold_ticker_metrics_row(normalized_ticker, settings=settings)
     mapping = _load_benchmark_mapping(normalized_ticker, settings=settings)
     benchmark_set_members = _load_benchmark_set_members(benchmark_set_id, settings=settings)
     benchmark_set_tickers = benchmark_set_members["ticker"].astype(str).str.upper().tolist()
 
     candidate_tickers = [normalized_ticker, *benchmark_set_tickers]
+    mart_benchmarks = [
+        str(mart_row.get("primary_benchmark") or "").upper(),
+        str(mart_row.get("secondary_benchmark") or "").upper(),
+    ]
+    candidate_tickers.extend([value for value in mart_benchmarks if value])
     if mapping:
         candidate_tickers.extend(
             [
@@ -191,18 +198,23 @@ def build_market_performance_section_data(
         raise ValueError(f"no canonical DuckDB price history found for {normalized_ticker}")
 
     available_benchmarks = {value for value in histories if value != normalized_ticker}
-    primary_benchmark = str(mapping.get("primary_benchmark") or "").upper() if mapping else ""
+    primary_benchmark = str(mart_row.get("primary_benchmark") or "").upper()
+    if not primary_benchmark:
+        primary_benchmark = str(mapping.get("primary_benchmark") or "").upper() if mapping else ""
     if not primary_benchmark or primary_benchmark not in available_benchmarks:
         primary_benchmark = benchmark_set_tickers[0] if benchmark_set_tickers else ""
         if primary_benchmark not in available_benchmarks:
             primary_benchmark = next(iter(sorted(available_benchmarks)), "")
 
-    mapped_secondary_candidates = [
-        str(mapping.get("sector_benchmark") or "").upper(),
-        str(mapping.get("style_benchmark") or "").upper(),
-        str(mapping.get("industry_benchmark") or "").upper(),
-        str(mapping.get("custom_benchmark") or "").upper(),
-    ]
+    mapped_secondary_candidates = [str(mart_row.get("secondary_benchmark") or "").upper()]
+    mapped_secondary_candidates.extend(
+        [
+            str(mapping.get("sector_benchmark") or "").upper(),
+            str(mapping.get("style_benchmark") or "").upper(),
+            str(mapping.get("industry_benchmark") or "").upper(),
+            str(mapping.get("custom_benchmark") or "").upper(),
+        ]
+    )
     mapped_secondary = next(
         (
             value

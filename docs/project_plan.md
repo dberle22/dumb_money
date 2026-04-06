@@ -32,7 +32,7 @@ Supporting references:
 
 ## Current Assessment
 
-Assessment date: `2026-04-03`
+Assessment date: `2026-04-06`
 
 - Sprint 0 is complete:
   the repo has a consolidated top-level structure, one `pyproject.toml`, one `src/dumb_money/` package tree, a working `.gitignore`, legacy material isolated under `legacy/`, and a documented working local setup path on Python 3.12
@@ -42,6 +42,8 @@ Assessment date: `2026-04-03`
   normalized staging transforms, benchmark sets, a first security master build, and a staging CLI path now exist with passing transform coverage
 - Sprint 4 is complete:
   DuckDB is now the canonical analytical store for the expanded shared datasets, maintained-universe ingestion has been validated through broad benchmark runs including `IWM`, and shared `benchmark_mappings` now move benchmark assignment logic out of notebook and scorecard defaults
+- Sprint 6 is complete:
+  the repo now has a canonical DuckDB-backed `gold_ticker_metrics_mart`, a second narrow `gold_scorecard_metric_rows` artifact for score transparency, mart-aware section loaders for the main ticker-level report sections, and a shared assembled full-report flow with saved AAPL artifacts under `reports/templates/full_company_report/`
 - The default dependency path now installs cleanly with `yfinance` as the required provider, while `yahooquery` has been moved to an optional `marketdata` extra
 - Local verification now works in `.venv` on Python `3.12.13`:
   `python -m pytest -q` passes and `python -m ruff check .` passes
@@ -58,7 +60,7 @@ Assessment date: `2026-04-03`
 | 3 | Company research MVP | Phase 3 | In Progress | First end-to-end single-company research packet |
 | 4 | Data foundation expansion | Phase 3 foundation | Done | Scalable shared datasets, benchmark mappings, and DuckDB storage |
 | 5 | Sector and peer research MVP | Phase 4 | Done | Sector context and peer-relative research outputs |
-| 6 | Reporting standardization | Phase 6 | Not Started | Repeatable report exports, scorecards, and chart helpers |
+| 6 | Reporting standardization | Phase 6 | Done | Repeatable report exports, scorecards, and chart helpers |
 | 7 | Portfolio fit MVP | Phase 5 | Not Started | Holdings import and candidate fit analysis on shared data |
 | 8 | App layer MVP | Phase 7 | Not Started | Local Streamlit app powered by shared modules |
 | 9 | LLM summaries | Phase 8 | Not Started | Narrative summaries generated from structured outputs |
@@ -342,7 +344,7 @@ Priority follow-on items identified during the first company research workflow:
 
 ## Sprint 4: Data Foundation Expansion
 
-**Status:** In Progress
+**Status:** Done
 
 **Goal**
 
@@ -521,7 +523,7 @@ Add sector and peer context so company research can be interpreted relative to c
 
 ## Sprint 6: Reporting Standardization
 
-**Status:** In Progress
+**Status:** Done
 
 **Goal**
 
@@ -537,7 +539,7 @@ Standardize reporting around an iterative section-by-section workflow so each re
 
 **Tasks**
 
-- [ ] define the canonical Sprint 6 report sections and lock the section-by-section implementation order
+- [x] define the canonical Sprint 6 report sections and lock the section-by-section implementation order
 - [x] structure report-building so each section lands as a single file that can be reviewed independently
 - [x] keep DuckDB as the canonical source for shared analytical tables used by report sections
 - [x] standardize section interfaces so each section has explicit shared inputs, table outputs, chart outputs, and focused tests
@@ -549,12 +551,21 @@ Standardize reporting around an iterative section-by-section workflow so each re
 - [x] implement `Peer Positioning` using canonical `peer_sets`, peer return outputs, and peer valuation outputs
 - [x] implement `Score Decomposition` as a standardized transparency section built on shared scorecard outputs
 - [x] implement `Final Research Summary` only after upstream sections expose stable structured fields
-- [ ] defer `Growth and Profitability` trend visuals until canonical historical fundamentals support is ready
-- [ ] update report loaders and section builders to prefer DuckDB-backed shared datasets and marts over raw-file or notebook-only logic
-- [ ] add focused tests for each section before advancing to the next section
-- [ ] assemble the final Sprint 6 notebook and report review flow so the full output is constructed from shared section modules end to end
-- [ ] add one full-report regression path that runs when we build the assembled Sprint 6 notebook or final output, rather than requiring that broad regression for each individual section slice
-- [ ] after the Sprint 6 visuals are complete, build a gold-layer ticker metrics mart in DuckDB with reusable ticker-level section inputs, then refactor section builders to query only the fields each visual needs
+- [x] implement `Growth and Profitability` once canonical historical fundamentals support is ready
+- [x] update report loaders and section builders to prefer DuckDB-backed shared datasets and marts over raw-file or notebook-only logic
+- [x] add focused tests for each section before advancing to the next section
+- [x] complete the gold-layer ticker metrics mart refactor pre-req before `Full Report Assembly`
+- [x] migrate the lowest-risk section loaders onto the gold mart first:
+  `Market Performance`, `Research Summary`, and `Growth and Profitability`
+- [x] migrate the next section loaders that mainly consume ticker-level snapshots or score summaries:
+  `Trend and Risk Profile`, `Balance Sheet Strength`, and `Valuation`
+- [x] keep detailed peer-row outputs, scorecard metric rows, and chart-ready time series in their existing canonical tables unless repeated assembly pressure clearly justifies a second gold artifact
+- [x] only after the first mart-backed section path is stable, assemble the final Sprint 6 notebook and report review flow so the full output is constructed from shared section modules end to end
+- [x] add one full-report regression path that runs when we build the assembled Sprint 6 notebook or final output, rather than requiring that broad regression for each individual section slice
+- [x] build a gold-layer ticker metrics mart in DuckDB with reusable ticker-level section inputs
+- [x] refactor section builders to query only the stable mart fields each section actually needs, while leaving detailed canonical tables in place for series and row-level context
+- [x] decide whether Sprint 6 needs a second gold artifact for `scorecard metric rows` before broad `Score Decomposition` and `Final Research Summary` refactors
+- [x] document which historical rollups should become canonical mart fields before relying on them in the assembled report
 - [x] keep notebooks as thin review layers over shared section modules rather than defining section logic inline
 
 **Recommended Section Order**
@@ -566,29 +577,37 @@ Standardize reporting around an iterative section-by-section workflow so each re
 5. `Valuation`
 6. `Peer Positioning`
 7. `Score Decomposition`
-8. `Final Research Summary`
-9. `Growth and Profitability`
-10. `Full Report Assembly`
-11. `Gold-Layer Ticker Metrics Mart`
+8. `Growth and Profitability`
+9. `Final Research Summary`
+10. `Gold-Layer Ticker Metrics Mart Refactor`
+11. `Full Report Assembly`
 
 **Current Sprint 6 Progress**
 
 - Completed section modules:
-  `Market Performance`, `Research Summary`, `Trend and Risk Profile`, `Balance Sheet Strength`, `Valuation`, `Peer Positioning`, `Score Decomposition`, and `Final Research Summary` now exist as dedicated shared section files under `src/dumb_money/outputs/`
+  `Market Performance`, `Research Summary`, `Trend and Risk Profile`, `Balance Sheet Strength`, `Valuation`, `Peer Positioning`, `Score Decomposition`, `Final Research Summary`, and `Growth and Profitability` now exist as dedicated shared section files under `src/dumb_money/outputs/`
 - Completed review artifacts:
-  AAPL review outputs now exist under `reports/templates/market_performance`, `reports/templates/research_summary`, `reports/templates/balance_sheet_strength`, `reports/templates/valuation`, `reports/templates/peer_positioning`, `reports/templates/score_decomposition`, and `reports/templates/final_research_summary`
+  AAPL review outputs now exist under `reports/templates/market_performance`, `reports/templates/research_summary`, `reports/templates/trend_risk_profile`, `reports/templates/balance_sheet_strength`, `reports/templates/valuation`, `reports/templates/peer_positioning`, `reports/templates/score_decomposition`, `reports/templates/final_research_summary`, `reports/templates/growth_profitability`, and `reports/templates/full_company_report`
 - Shared-contract progress:
-  report sections now consistently build from canonical DuckDB-backed inputs or shared staged summaries rather than notebook-only logic; valuation now reuses shared scorecard metrics plus canonical peer valuation context when `peer_sets` are available, peer positioning now reuses canonical peer return, peer valuation, and sector snapshot context through one shared section contract, score decomposition now reuses canonical category scores plus metric-level score transparency fields without redefining score math in the section layer, and final research summary now synthesizes upstream section evidence into one deterministic closing memo and review card rather than bespoke notebook prose
+  report sections now consistently build from canonical DuckDB-backed inputs or shared staged summaries rather than notebook-only logic; valuation now reuses shared scorecard metrics plus canonical peer valuation context when `peer_sets` are available, peer positioning now reuses canonical peer return, peer valuation, and sector snapshot context through one shared section contract, score decomposition now reuses canonical category scores plus metric-level score transparency fields without redefining score math in the section layer, final research summary now synthesizes upstream section evidence into one deterministic closing memo and review card rather than bespoke notebook prose, and the historical fundamentals contract now carries statement-derived ROIC inputs plus derived per-period profitability and return metrics needed by `Growth and Profitability`
 - Benchmark-set requirement:
   the full single-ticker notebook workflow requires the chosen benchmark set to include any sector, style, or industry ETFs referenced by canonical `benchmark_mappings`; `sample_universe` has now been refreshed to carry the current sector and industry ETF coverage so future ticker onboarding should usually only require correct benchmark mappings rather than benchmark-set edits
 - Peer-set progress:
   canonical `peer_sets` now include `peer_source` so downstream sections can distinguish `automatic` peer rows from `curated` research peer lists while still reading one shared contract from DuckDB
 - Full-report verification note:
-  broad end-to-end regression is now better treated as a final notebook or report-assembly check than as a blocking verification step for each section slice; the remaining Sprint 6 closeout should add one explicit assembled-report regression path
-- Planned closeout refactor:
-  once the remaining Sprint 6 visuals are complete, add a gold-layer ticker metrics data product in DuckDB so section modules can read precomputed ticker-level metrics instead of assembling broader research packets than they need
+  broad end-to-end regression now exists as a focused assembled-report path via `tests/outputs/test_company_report.py`, which verifies the shared bundle builder, ordered section index, and saved full-report artifacts
+- Gold-artifact closeout:
+  `gold_ticker_metrics_mart` is now the canonical ticker-level snapshot contract used by `Market Performance`, `Research Summary`, `Growth and Profitability`, `Trend and Risk Profile`, `Balance Sheet Strength`, and `Valuation`; `gold_scorecard_metric_rows` was added as a second narrow gold artifact with one row per `ticker x score_date x metric_id` and now feeds `Score Decomposition` plus the score-focused path inside `Final Research Summary`
+- Mart scope guardrail:
+  keep chart-ready price history, drawdown series, moving-average series, peer comparison row sets, and full scorecard metric rows in their current canonical tables for now; the gold mart should stay focused on stable ticker-level section inputs rather than absorbing every downstream dataset
+- Historical rollup decision point:
+  Sprint 6 closes with the current mart rollups only: selected fundamentals-history period metadata plus latest growth and margin snapshot fields were sufficient for the shared assembled report, while richer multi-year growth summaries, rolling margin averages, profitability consistency counts, and valuation-band histories remain optional later gold-layer follow-up rather than Sprint 6 blockers
+- Data-platform follow-up note:
+  as we build out the future `data_platform`, we should audit full-universe coverage for the new historical ROIC, EPS, and derived profitability fields and decide whether any provider-specific fallback rules or gold-layer standardization are needed before relying on those metrics across the entire universe
 - Follow-up documentation gap:
-  we should add one shared reference for KPI definitions, score metric definitions, and score interpretation bands before Sprint 6 is considered complete
+  add one shared reference for KPI definitions, score metric definitions, and score interpretation bands; this is worth doing next, but it is now follow-up documentation work rather than Sprint 6 blocking work
+- Sprint 6 closeout note:
+  Sprint 6 now closes as complete. The assembled shared report flow exists through `build_full_company_report_bundle(...)`, `build_full_company_report_index(...)`, and `save_full_company_report(...)`, with saved AAPL assembled artifacts under `reports/templates/full_company_report/`. Remaining work is non-blocking follow-up only: KPI and score-definition reference docs, broader universe validation for the newer growth fields, and any future decision to promote richer historical rollups into gold if multiple downstream consumers start requiring them
 
 **Section Plan**
 
@@ -724,39 +743,60 @@ Standardize reporting around an iterative section-by-section workflow so each re
    Visuals/tables:
    growth trend charts, margin trend charts, return-on-capital summary
    Shared boundaries:
-   requires a canonical historical fundamentals data product before the report section is standardized
+   standardized on canonical `normalized_fundamentals`, shared historical-fundamentals prep helpers, and light section formatting; downstream gold-layer marts should eventually replace broader packet assembly for this section
    Focused tests:
    period alignment, growth-rate math, sparse-history handling, TTM versus annual handling
    Risks/dependencies:
-   this remains the clearest dependency-blocked section and should come after the ready-now sections
+   provider coverage for statement-derived ROIC, diluted EPS, and related historical profitability fields will vary across the universe and should be audited later as part of the data-platform buildout
+   Current status:
+   completed as a dedicated shared section module with standardized growth and margin trend outputs, a return-on-capital summary, reusable interpretation text, focused tests, and a saved AAPL review artifact; the canonical historical fundamentals contract now includes additional statement-derived fields and derived period metrics such as effective tax rate, NOPAT, and ROIC when raw coverage exists
 
-10. `Full Report Assembly`
+10. `Gold-Layer Ticker Metrics Mart Refactor`
+   Narrative goal:
+   move Sprint 6 sections onto a stable ticker-level mart contract before full report orchestration so the final assembled flow is not built on oversized packet reconstruction
+   Shared data inputs:
+   canonical `gold_ticker_metrics_mart` plus existing canonical tables for time series, peer rows, sector context, and any detailed score outputs not yet promoted into gold
+   Loader migration order:
+   start with `Market Performance`, `Research Summary`, and `Growth and Profitability`, then move `Trend and Risk Profile`, `Balance Sheet Strength`, and `Valuation`, and only then decide whether `Score Decomposition` and `Final Research Summary` need a second gold artifact
+   Shared boundaries:
+   use the gold mart for stable ticker metadata, resolved benchmark identifiers, latest fundamentals summary fields, risk and trend snapshots, peer summary medians, score summaries, and selected historical rollups; keep long-form time series and row-level peer or metric detail in the existing canonical tables
+   Focused tests:
+   mart schema checks, mart refresh coverage, loader-regression tests for migrated sections, and one integration test proving the assembled report can read a mixed mart-plus-canonical contract cleanly
+   Risks/dependencies:
+   migrating too aggressively could freeze unstable fields into gold too early, while migrating too slowly leaves `Full Report Assembly` dependent on broader packet reconstruction than it needs
+   Execution checklist:
+   1. confirm the current `gold_ticker_metrics_mart` contract still reflects the stable ticker-level fields actually reused across Sprint 6 sections
+   2. document field ownership explicitly:
+      which fields come from the mart versus which still come from canonical time-series, peer-row, sector, or score-detail tables
+   3. refactor `Research Summary` to prefer mart-backed ticker metadata, score summary fields, and strongest or weakest pillar inputs where applicable
+   4. refactor `Market Performance` to keep price history in canonical price tables but use mart-backed resolved benchmark identifiers and precomputed trailing summary fields where helpful
+   5. refactor `Growth and Profitability` to keep historical fundamentals series in canonical tables while using mart-backed report-date, score, and selected historical snapshot rollups
+   6. add focused regression tests for each first-wave migrated section proving it reads the mart cleanly without changing the user-facing contract
+   7. refactor `Trend and Risk Profile` to use mart-backed risk and trend snapshot fields while keeping drawdown and moving-average series in canonical time-series tables
+   8. refactor `Balance Sheet Strength` to use mart-backed latest fundamentals summary fields and category score snapshots where those now replace repeated loader logic
+   9. refactor `Valuation` to use mart-backed latest valuation inputs and peer summary medians while keeping detailed peer comparison rows in canonical peer outputs
+   10. add second-wave regression tests for the migrated sections above and verify that mart-backed loaders still preserve the current section output interfaces
+   11. review `Score Decomposition` and `Final Research Summary` and decide whether they should:
+       stay on the current scorecard path for now, read partially from the ticker mart, or move to a second scorecard-metrics gold artifact
+   12. if a second gold artifact is justified, define one narrow row-level scorecard mart with one row per `ticker x score_date x metric_id` rather than widening the ticker mart further
+   13. decide which historical rollups, if any, are canonical enough to add now:
+       examples include multi-period growth rates, rolling average margins, profitability consistency counts, or valuation-band summaries
+   14. only after the mart-backed loader contract is stable, wire `Full Report Assembly` to the refactored section loaders and add one broad assembled-report regression path
+   15. save refreshed review artifacts for `AAPL` as needed so the mart-backed section outputs remain easy to inspect during closeout
+
+11. `Full Report Assembly`
    Narrative goal:
    assemble the finished Sprint 6 notebook or report output from the shared section modules so the whole memo can be reviewed end to end rather than as separate section artifacts
    Shared data inputs:
-   all completed section modules, shared report helpers, notebook review flow, output ordering, and artifact-save conventions
+   all completed section modules, shared report helpers, notebook review flow, output ordering, artifact-save conventions, and the stable mart-backed loader contract established in the preceding refactor step
    Visuals/tables:
    one assembled notebook or report flow that renders the full sequence of completed sections with a repeatable final output path
    Shared boundaries:
-   notebooks should stay thin and orchestrate shared section modules only; final assembly should not reintroduce section logic into notebook cells
+   notebooks should stay thin and orchestrate shared section modules only; final assembly should not reintroduce section logic into notebook cells or bypass the stabilized gold-layer loader contract
    Focused tests:
    one broad assembled-report regression path, section-order checks, artifact-generation smoke test, and notebook or export wiring checks
    Risks/dependencies:
-   this should be the place where we run the heavier end-to-end regression, since it effectively rebuilds the whole report stack and is too expensive to require on every section slice
-
-11. `Gold-Layer Ticker Metrics Mart`
-   Narrative goal:
-   refactor Sprint 6 section inputs onto a simpler gold-layer ticker metrics table so each section can query the exact stable fields it needs without rebuilding oversized research packets
-   Shared data inputs:
-   canonical staged prices, fundamentals, benchmark mappings, peer sets, sector snapshots, score outputs, and standardized section-level derived metrics
-   Visuals/tables:
-   no direct visual requirement; the primary output is one DuckDB gold-layer ticker metrics table or mart plus thin section-loader updates
-   Shared boundaries:
-   DuckDB remains canonical, marts should expose stable queryable section inputs, and section modules should move toward reading precomputed ticker-level fields rather than reconstructing broad upstream packets on demand
-   Focused tests:
-   DuckDB schema and contract validation, field-level derivation tests, mart refresh smoke tests, and one section-loader regression proving sections can read the gold layer cleanly
-   Risks/dependencies:
-   this is the main Sprint 6 closeout refactor and should follow section stabilization plus the first end-to-end notebook assembly so we refactor toward a proven final report contract
+   this should be the place where we run the heavier end-to-end regression, since it effectively rebuilds the whole report stack and is too expensive to require on every section slice; it should only be considered complete after the gold-mart refactor pre-req is stable
 
 **Single-File Section Workflow**
 

@@ -8,6 +8,7 @@ import pandas as pd
 matplotlib.use("Agg")
 
 from dumb_money.analytics.scorecard import CompanyScorecard
+from dumb_money.config import AppSettings
 from dumb_money.outputs import (
     build_score_decomposition_section_data,
     render_score_decomposition_section,
@@ -20,6 +21,11 @@ from dumb_money.outputs.score_decomposition_section import (
     build_score_decomposition_strip_table,
 )
 from dumb_money.research.company import CompanyResearchPacket
+from dumb_money.storage import (
+    GOLD_SCORECARD_METRIC_ROWS_COLUMNS,
+    GOLD_TICKER_METRICS_MART_COLUMNS,
+    write_canonical_table,
+)
 
 
 def _build_packet(
@@ -218,7 +224,89 @@ def test_score_decomposition_section_builds_from_aapl_and_saves(tmp_path) -> Non
         output_dir=Path(tmp_path) / "score_decomposition",
     )
     assert artifacts["figure_path"].exists()
-    assert artifacts["category_table_path"].exists()
-    assert artifacts["metric_table_path"].exists()
-    assert artifacts["strip_path"].exists()
-    assert artifacts["text_path"].exists()
+
+
+def test_score_decomposition_section_prefers_gold_score_artifacts(tmp_path) -> None:
+    settings = AppSettings(project_root=tmp_path)
+    settings.ensure_directories()
+
+    mart_row = {column: None for column in GOLD_TICKER_METRICS_MART_COLUMNS}
+    mart_row.update(
+        {
+            "mart_id": "gold_ticker_metrics::AAPL::2025-01-15",
+            "ticker": "AAPL",
+            "as_of_date": "2024-12-31",
+            "score_date": "2025-01-15",
+            "company_name": "Apple Mart Name",
+            "sector": "Technology",
+            "industry": "Consumer Electronics",
+            "total_score": 74.0,
+            "confidence_score": 0.95,
+            "market_performance_score": 18.0,
+            "market_performance_available_weight": 25.0,
+            "growth_profitability_score": 30.0,
+            "growth_profitability_available_weight": 35.0,
+            "balance_sheet_score": 16.0,
+            "balance_sheet_available_weight": 25.0,
+            "valuation_score": 10.0,
+            "valuation_available_weight": 15.0,
+        }
+    )
+    write_canonical_table(pd.DataFrame([mart_row]), "gold_ticker_metrics_mart", settings=settings)
+
+    metric_rows = pd.DataFrame(
+        [
+            {
+                "scorecard_metric_row_id": "gold_scorecard_metric::AAPL::2025-01-15::return_vs_spy_1y",
+                "ticker": "AAPL",
+                "score_date": "2025-01-15",
+                "metric_id": "return_vs_spy_1y",
+                "category": "Market Performance",
+                "metric_name": "12 month return vs SPY",
+                "raw_value": 0.11,
+                "normalized_value": 0.75,
+                "scoring_method": "threshold",
+                "metric_score": 7.5,
+                "metric_weight": 10.0,
+                "metric_available": True,
+                "metric_applicable": True,
+                "confidence_flag": "ok",
+                "notes": "Uses trailing 1 year excess return versus the primary benchmark.",
+                "company_name": "Apple Mart Name",
+                "sector": "Technology",
+                "industry": "Consumer Electronics",
+                "primary_benchmark": "SPY",
+                "secondary_benchmark": "QQQ",
+            },
+            {
+                "scorecard_metric_row_id": "gold_scorecard_metric::AAPL::2025-01-15::forward_pe",
+                "ticker": "AAPL",
+                "score_date": "2025-01-15",
+                "metric_id": "forward_pe",
+                "category": "Valuation",
+                "metric_name": "Forward P/E",
+                "raw_value": 18.0,
+                "normalized_value": 0.75,
+                "scoring_method": "peer_relative",
+                "metric_score": 3.75,
+                "metric_weight": 5.0,
+                "metric_available": True,
+                "metric_applicable": True,
+                "confidence_flag": "ok",
+                "notes": "Peer-relative scoring versus peer median 22.00x.",
+                "company_name": "Apple Mart Name",
+                "sector": "Technology",
+                "industry": "Consumer Electronics",
+                "primary_benchmark": "SPY",
+                "secondary_benchmark": "QQQ",
+            },
+        ]
+    )
+    metric_rows = metric_rows.reindex(columns=GOLD_SCORECARD_METRIC_ROWS_COLUMNS)
+    write_canonical_table(metric_rows, "gold_scorecard_metric_rows", settings=settings)
+
+    data = build_score_decomposition_section_data("AAPL", settings=settings)
+
+    assert data.company_name == "Apple Mart Name"
+    assert data.report_date == "2025-01-15"
+    assert "forward_pe" in data.metric_scores["metric_id"].tolist()

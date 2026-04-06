@@ -307,6 +307,163 @@ def build_trailing_return_comparison(
     return comparison
 
 
+def prepare_fundamentals_history(
+    fundamentals: pd.DataFrame,
+    ticker: str,
+    *,
+    period_type: str,
+) -> pd.DataFrame:
+    """Prepare one ticker's historical fundamentals for an explicit period contract.
+
+    The shared contract keeps quarterly, annual, and TTM rows in one canonical table.
+    This helper makes the section-layer period choice explicit by filtering to a single
+    period type, deduplicating on period end date, and deriving trend-ready fields.
+    """
+
+    columns = [
+        "ticker",
+        "as_of_date",
+        "period_end_date",
+        "fiscal_year",
+        "fiscal_quarter",
+        "fiscal_period",
+        "period_type",
+        "revenue",
+        "gross_profit",
+        "operating_income",
+        "net_income",
+        "free_cash_flow",
+        "pretax_income",
+        "tax_provision",
+        "tax_rate_for_calcs",
+        "effective_tax_rate",
+        "nopat",
+        "interest_expense",
+        "total_assets",
+        "total_equity_gross_minority_interest",
+        "stockholders_equity",
+        "invested_capital",
+        "working_capital",
+        "shares_outstanding",
+        "basic_eps",
+        "diluted_eps",
+        "eps_trailing",
+        "gross_margin",
+        "operating_margin",
+        "return_on_equity",
+        "return_on_assets",
+        "return_on_invested_capital",
+        "period_label",
+        "eps_value",
+        "eps_basis",
+        "revenue_growth",
+        "eps_growth",
+        "gross_margin_value",
+        "operating_margin_value",
+        "free_cash_flow_margin",
+    ]
+    if fundamentals.empty:
+        return pd.DataFrame(columns=columns)
+
+    normalized_ticker = ticker.strip().upper()
+    rows = fundamentals.loc[fundamentals["ticker"].astype(str).str.upper() == normalized_ticker].copy()
+    if rows.empty:
+        return pd.DataFrame(columns=columns)
+
+    rows["as_of_date"] = pd.to_datetime(rows["as_of_date"], errors="coerce")
+    rows["period_end_date"] = pd.to_datetime(rows.get("period_end_date"), errors="coerce")
+    rows["period_type"] = rows.get("period_type", pd.Series(index=rows.index, dtype=object)).astype(str).str.lower()
+    rows = rows.loc[rows["period_type"] == period_type.strip().lower()].copy()
+    rows = rows.dropna(subset=["period_end_date"])
+    if rows.empty:
+        return pd.DataFrame(columns=columns)
+
+    rows = rows.sort_values(["period_end_date", "as_of_date"]).drop_duplicates(
+        subset=["period_end_date"],
+        keep="last",
+    )
+
+    numeric_fields = [
+        "revenue",
+        "gross_profit",
+        "operating_income",
+        "net_income",
+        "free_cash_flow",
+        "pretax_income",
+        "tax_provision",
+        "tax_rate_for_calcs",
+        "effective_tax_rate",
+        "nopat",
+        "interest_expense",
+        "total_assets",
+        "total_equity_gross_minority_interest",
+        "stockholders_equity",
+        "invested_capital",
+        "working_capital",
+        "shares_outstanding",
+        "basic_eps",
+        "diluted_eps",
+        "eps_trailing",
+        "gross_margin",
+        "operating_margin",
+        "return_on_equity",
+        "return_on_assets",
+        "return_on_invested_capital",
+    ]
+    for field in numeric_fields:
+        if field not in rows.columns:
+            rows[field] = pd.NA
+        rows[field] = pd.to_numeric(rows[field], errors="coerce")
+
+    def _safe_divide(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
+        valid = denominator.notna() & (denominator != 0)
+        result = pd.Series(pd.NA, index=numerator.index, dtype="Float64")
+        result.loc[valid] = numerator.loc[valid] / denominator.loc[valid]
+        return result.astype(float)
+
+    derived_eps = _safe_divide(rows["net_income"], rows["shares_outstanding"])
+    rows["eps_value"] = (
+        rows["diluted_eps"]
+        .combine_first(rows["basic_eps"])
+        .combine_first(derived_eps)
+        .combine_first(rows["eps_trailing"])
+    )
+    rows["eps_basis"] = rows["diluted_eps"].map(
+        lambda value: "diluted_eps statement" if pd.notna(value) else None
+    ).fillna(
+        rows["basic_eps"].map(lambda value: "basic_eps statement" if pd.notna(value) else None)
+    ).fillna(
+        derived_eps.map(lambda value: "net_income / shares_outstanding" if pd.notna(value) else None)
+    ).fillna(
+        rows["eps_trailing"].map(lambda value: "eps_trailing snapshot" if pd.notna(value) else "unavailable")
+    )
+
+    rows["gross_margin_value"] = _safe_divide(rows["gross_profit"], rows["revenue"]).combine_first(rows["gross_margin"])
+    rows["operating_margin_value"] = _safe_divide(rows["operating_income"], rows["revenue"]).combine_first(
+        rows["operating_margin"]
+    )
+    rows["free_cash_flow_margin"] = _safe_divide(rows["free_cash_flow"], rows["revenue"])
+    rows["revenue_growth"] = rows["revenue"].pct_change()
+    rows["eps_growth"] = rows["eps_value"].pct_change()
+
+    def _label_period(row: pd.Series) -> str:
+        period_end = row.get("period_end_date")
+        if pd.isna(period_end):
+            return str(row.get("fiscal_period") or row.get("period_type") or "Period")
+        year = int(pd.Timestamp(period_end).year)
+        fiscal_period = str(row.get("fiscal_period") or "").strip()
+        if row.get("period_type") == "quarterly" and fiscal_period:
+            return f"{fiscal_period} {year}"
+        if row.get("period_type") == "annual":
+            return f"FY {year}"
+        if fiscal_period:
+            return f"{fiscal_period} {year}"
+        return str(pd.Timestamp(period_end).date())
+
+    rows["period_label"] = rows.apply(_label_period, axis=1)
+    return rows.reindex(columns=columns).reset_index(drop=True)
+
+
 def build_fundamentals_summary(fundamentals: pd.DataFrame, ticker: str) -> dict[str, Any]:
     """Build a latest-snapshot fundamentals summary with a few derived fields."""
 
@@ -360,7 +517,17 @@ def build_fundamentals_summary(fundamentals: pd.DataFrame, ticker: str) -> dict[
     # and debt are not consistently populated on TTM rows.
     latest = _latest_row(rows)
     latest_balance_sheet = _resolve_latest_non_null(
-        ["total_cash", "total_debt", "current_assets", "current_liabilities"],
+        [
+            "total_cash",
+            "total_debt",
+            "total_assets",
+            "current_assets",
+            "current_liabilities",
+            "total_equity_gross_minority_interest",
+            "stockholders_equity",
+            "invested_capital",
+            "working_capital",
+        ],
         allowed_period_types={"quarterly", "annual"},
     )
 
@@ -379,8 +546,22 @@ def build_fundamentals_summary(fundamentals: pd.DataFrame, ticker: str) -> dict[
         "operating_margin",
         "profit_margin",
         "free_cash_flow",
+        "pretax_income",
+        "tax_provision",
+        "tax_rate_for_calcs",
+        "effective_tax_rate",
+        "nopat",
+        "interest_expense",
+        "total_assets",
+        "total_equity_gross_minority_interest",
+        "stockholders_equity",
+        "invested_capital",
+        "working_capital",
+        "basic_eps",
+        "diluted_eps",
         "return_on_equity",
         "return_on_assets",
+        "return_on_invested_capital",
         "trailing_pe",
         "forward_pe",
         "ev_to_ebitda",
@@ -388,21 +569,43 @@ def build_fundamentals_summary(fundamentals: pd.DataFrame, ticker: str) -> dict[
         "dividend_yield",
         "total_cash",
         "total_debt",
+        "total_assets",
         "current_assets",
         "current_liabilities",
+        "total_equity_gross_minority_interest",
+        "stockholders_equity",
+        "invested_capital",
+        "working_capital",
         "current_ratio",
         "debt_to_equity",
     ]
     summary = {field: latest.get(field) for field in summary_fields}
     if not latest_balance_sheet.empty:
-        for field in ("total_cash", "total_debt", "current_assets", "current_liabilities"):
+        for field in (
+            "total_cash",
+            "total_debt",
+            "total_assets",
+            "current_assets",
+            "current_liabilities",
+            "total_equity_gross_minority_interest",
+            "stockholders_equity",
+            "invested_capital",
+            "working_capital",
+        ):
             if pd.isna(summary.get(field)):
                 summary[field] = latest_balance_sheet.get(field)
 
     total_cash = summary.get("total_cash")
     total_debt = summary.get("total_debt")
+    total_assets = summary.get("total_assets")
+    stockholders_equity = summary.get("stockholders_equity")
+    if stockholders_equity is None or pd.isna(stockholders_equity):
+        stockholders_equity = summary.get("total_equity_gross_minority_interest")
+    invested_capital = summary.get("invested_capital")
     revenue_ttm = summary.get("revenue_ttm")
     free_cash_flow = summary.get("free_cash_flow")
+    net_income = summary.get("net_income")
+    nopat = summary.get("nopat")
 
     net_cash = (
         float(total_cash) - float(total_debt)
@@ -414,6 +617,12 @@ def build_fundamentals_summary(fundamentals: pd.DataFrame, ticker: str) -> dict[
         if pd.notna(free_cash_flow) and pd.notna(revenue_ttm) and float(revenue_ttm) != 0
         else None
     )
+    if summary.get("return_on_equity") is None and pd.notna(net_income) and pd.notna(stockholders_equity) and float(stockholders_equity) != 0:
+        summary["return_on_equity"] = float(net_income) / float(stockholders_equity)
+    if summary.get("return_on_assets") is None and pd.notna(net_income) and pd.notna(total_assets) and float(total_assets) != 0:
+        summary["return_on_assets"] = float(net_income) / float(total_assets)
+    if summary.get("return_on_invested_capital") is None and pd.notna(nopat) and pd.notna(invested_capital) and float(invested_capital) != 0:
+        summary["return_on_invested_capital"] = float(nopat) / float(invested_capital)
 
     summary["as_of_date"] = latest["as_of_date"].date().isoformat()
     summary["net_cash"] = net_cash

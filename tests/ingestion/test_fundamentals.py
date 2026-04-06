@@ -107,8 +107,21 @@ def test_normalize_historical_fundamentals_payload_maps_mixed_period_history() -
                 "period_type": "quarterly",
                 "revenue": 900000,
                 "gross_profit": 380000,
+                "operating_income": 210000,
+                "net_income": 170000,
+                "pretax_income": 200000,
+                "tax_provision": 30000,
                 "free_cash_flow": 120000,
+                "interest_expense": 4000,
+                "total_assets": 350000,
                 "total_cash": 60000,
+                "total_debt": 75000,
+                "current_assets": 145000,
+                "current_liabilities": 98000,
+                "stockholders_equity": 120000,
+                "invested_capital": 150000,
+                "working_capital": 47000,
+                "diluted_eps": 1.7,
             },
             {
                 "period_end_date": "2023-09-30",
@@ -116,8 +129,19 @@ def test_normalize_historical_fundamentals_payload_maps_mixed_period_history() -
                 "period_type": "annual",
                 "revenue": 1500000,
                 "gross_profit": 620000,
+                "operating_income": 420000,
+                "net_income": 340000,
+                "pretax_income": 390000,
+                "tax_provision": 50000,
                 "free_cash_flow": 210000,
                 "total_cash": 55000,
+                "total_debt": 70000,
+                "total_assets": 500000,
+                "current_assets": 180000,
+                "current_liabilities": 120000,
+                "stockholders_equity": 140000,
+                "invested_capital": 180000,
+                "diluted_eps": 6.8,
             },
             {
                 "period_end_date": "2024-03-30",
@@ -125,8 +149,17 @@ def test_normalize_historical_fundamentals_payload_maps_mixed_period_history() -
                 "revenue": 1100000,
                 "revenue_ttm": 1100000,
                 "gross_profit": 470000,
+                "operating_income": 260000,
+                "net_income": 205000,
+                "pretax_income": 240000,
+                "tax_provision": 35000,
                 "free_cash_flow": 140000,
                 "total_cash": 60000,
+                "total_debt": 75000,
+                "total_assets": 360000,
+                "stockholders_equity": 125000,
+                "invested_capital": 155000,
+                "diluted_eps": 7.1,
             },
         ],
     }
@@ -144,6 +177,12 @@ def test_normalize_historical_fundamentals_payload_maps_mixed_period_history() -
     ttm = next(snapshot for snapshot in snapshots if snapshot.period_type == "ttm")
     assert quarterly.fiscal_period == "Q1"
     assert quarterly.revenue == 900000
+    assert quarterly.gross_margin == pytest.approx(380000 / 900000)
+    assert quarterly.current_ratio == pytest.approx(145000 / 98000)
+    assert quarterly.debt_to_equity == pytest.approx((75000 / 120000) * 100)
+    assert quarterly.effective_tax_rate == pytest.approx(30000 / 200000)
+    assert quarterly.return_on_invested_capital == pytest.approx((210000 * (1 - (30000 / 200000))) / 150000)
+    assert quarterly.diluted_eps == 1.7
     assert ttm.revenue_ttm == 1100000
     assert ttm.long_name == "Apple Inc."
 

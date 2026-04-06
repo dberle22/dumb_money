@@ -11,11 +11,7 @@ import pandas as pd
 from matplotlib.figure import Figure
 
 from dumb_money.analytics.company import (
-    build_fundamentals_summary,
     build_peer_valuation_comparison,
-    calculate_return_windows,
-    calculate_risk_metrics,
-    calculate_trend_metrics,
 )
 from dumb_money.analytics.scorecard import (
     CATEGORY_TARGET_WEIGHTS,
@@ -25,7 +21,11 @@ from dumb_money.config import AppSettings, get_settings
 from dumb_money.outputs.market_performance_section import build_market_performance_section_data
 from dumb_money.research.company import (
     CompanyResearchPacket,
+    build_fundamentals_summary_from_mart_row,
+    build_risk_metrics_from_mart_row,
+    build_trend_metrics_from_mart_row,
     load_benchmark_mappings,
+    load_gold_ticker_metrics_row,
     load_peer_sets,
     load_security_master,
     load_staged_fundamentals,
@@ -304,6 +304,7 @@ def build_research_summary_section_data(
 
     settings = settings or get_settings()
     normalized_ticker = ticker.strip().upper()
+    mart_row = load_gold_ticker_metrics_row(normalized_ticker, settings=settings)
 
     # Reuse the standardized Market Performance section contract for benchmark
     # alignment instead of re-implementing benchmark selection in this section.
@@ -315,7 +316,11 @@ def build_research_summary_section_data(
     company_history = market_data.histories[normalized_ticker]
 
     fundamentals = load_staged_fundamentals(settings=settings)
-    fundamentals_summary = build_fundamentals_summary(fundamentals, normalized_ticker)
+    fundamentals_summary = build_fundamentals_summary_from_mart_row(mart_row)
+    if not fundamentals_summary:
+        from dumb_money.analytics.company import build_fundamentals_summary
+
+        fundamentals_summary = build_fundamentals_summary(fundamentals, normalized_ticker)
     security_master = load_security_master(settings=settings)
     benchmark_mappings = load_benchmark_mappings(settings=settings)
     peer_sets = load_peer_sets(settings=settings)
@@ -338,36 +343,33 @@ def build_research_summary_section_data(
 
     security_row = security_rows.iloc[-1].to_dict() if not security_rows.empty else {}
     benchmark_mapping_row = benchmark_mapping_rows.iloc[-1].to_dict() if not benchmark_mapping_rows.empty else {}
+    risk_metrics = build_risk_metrics_from_mart_row(mart_row)
+    trend_metrics = build_trend_metrics_from_mart_row(mart_row)
+    if not risk_metrics or not trend_metrics:
+        from dumb_money.analytics.company import calculate_risk_metrics, calculate_trend_metrics
 
-    return_windows = calculate_return_windows(company_history)
-    risk_metrics = calculate_risk_metrics(company_history)
-    trend_metrics = calculate_trend_metrics(company_history)
+        risk_metrics = calculate_risk_metrics(company_history)
+        trend_metrics = calculate_trend_metrics(company_history)
     peer_valuation_comparison = build_peer_valuation_comparison(
         normalized_ticker,
         peer_rows,
         fundamentals,
-    )
-
-    end_dates = return_windows["end_date"].dropna() if "end_date" in return_windows.columns else pd.Series(dtype=object)
-    score_date = (
-        str(pd.to_datetime(end_dates.iloc[-1]).date())
-        if not return_windows.empty and not end_dates.empty
-        else fundamentals_summary.get("as_of_date")
     )
     scorecard = build_company_scorecard(
         ticker=normalized_ticker,
         company_name=fundamentals_summary.get("long_name"),
         sector=fundamentals_summary.get("sector") or security_row.get("sector"),
         industry=fundamentals_summary.get("industry") or security_row.get("industry"),
-        score_date=score_date,
+        score_date=mart_row.get("score_date") or fundamentals_summary.get("as_of_date"),
         benchmark_comparison=market_data.benchmark_comparison,
         risk_metrics=risk_metrics,
         trend_metrics=trend_metrics,
         fundamentals_summary=fundamentals_summary,
         peer_valuation_comparison=peer_valuation_comparison,
-        primary_benchmark=benchmark_mapping_row.get("primary_benchmark") or market_data.primary_benchmark,
+        primary_benchmark=mart_row.get("primary_benchmark") or benchmark_mapping_row.get("primary_benchmark") or market_data.primary_benchmark,
         secondary_benchmark=(
-            benchmark_mapping_row.get("sector_benchmark")
+            mart_row.get("secondary_benchmark")
+            or benchmark_mapping_row.get("sector_benchmark")
             or benchmark_mapping_row.get("style_benchmark")
             or benchmark_mapping_row.get("industry_benchmark")
             or benchmark_mapping_row.get("custom_benchmark")
@@ -377,11 +379,11 @@ def build_research_summary_section_data(
 
     packet = CompanyResearchPacket(
         ticker=normalized_ticker,
-        company_name=fundamentals_summary.get("long_name"),
+        company_name=mart_row.get("company_name") or fundamentals_summary.get("long_name"),
         as_of_date=fundamentals_summary.get("as_of_date"),
         company_history=company_history,
         benchmark_histories={},
-        return_windows=return_windows,
+        return_windows=pd.DataFrame(),
         trailing_return_comparison=market_data.trailing_return_comparison,
         risk_metrics=risk_metrics,
         trend_metrics=trend_metrics,

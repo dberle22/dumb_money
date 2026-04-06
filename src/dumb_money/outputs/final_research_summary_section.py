@@ -44,9 +44,12 @@ from dumb_money.outputs.valuation_section import (
 )
 from dumb_money.research.company import (
     CompanyResearchPacket,
+    build_company_scorecard_from_gold_artifacts,
     load_benchmark_mappings,
     load_benchmark_prices,
     load_benchmark_set,
+    load_gold_scorecard_metric_rows_for_ticker,
+    load_gold_ticker_metrics_row,
     load_peer_sets,
     load_sector_snapshots,
     load_security_master,
@@ -322,7 +325,6 @@ def _build_bottom_line(
 def build_final_research_summary_text_from_data(data: FinalResearchSummarySectionData) -> str:
     """Build the reusable short final memo text for this section."""
 
-    company_label = data.company_name or data.ticker
     return (
         f"{data.bottom_line} "
         f"What is working: {_collapse_points(data.what_is_working)} "
@@ -441,6 +443,7 @@ def build_final_research_summary_section_data(
 
     settings = settings or get_settings()
     normalized_ticker = ticker.strip().upper()
+    mart_row = load_gold_ticker_metrics_row(normalized_ticker, settings=settings)
 
     prices = load_staged_prices(settings=settings)
     fundamentals = load_staged_fundamentals(settings=settings)
@@ -530,25 +533,37 @@ def build_final_research_summary_section_data(
     )
     peer_return_summary_stats = build_peer_return_summary_stats(peer_return_comparison)
     peer_summary_stats = build_peer_summary_stats(peer_valuation_comparison)
-    scorecard = build_company_scorecard(
-        ticker=normalized_ticker,
-        company_name=fundamentals_summary.get("long_name"),
-        sector=fundamentals_summary.get("sector") or security_row.get("sector"),
-        industry=fundamentals_summary.get("industry") or security_row.get("industry"),
-        score_date=score_date,
-        benchmark_comparison=benchmark_comparison,
-        risk_metrics=risk_metrics,
-        trend_metrics=trend_metrics,
-        fundamentals_summary=fundamentals_summary,
-        peer_valuation_comparison=peer_valuation_comparison,
-        primary_benchmark=resolved_primary_benchmark,
-        secondary_benchmark=(
-            benchmark_mapping_row.get("sector_benchmark")
-            or benchmark_mapping_row.get("style_benchmark")
-            or benchmark_mapping_row.get("industry_benchmark")
-            or benchmark_mapping_row.get("custom_benchmark")
-        ),
+    metric_rows = load_gold_scorecard_metric_rows_for_ticker(
+        normalized_ticker,
+        score_date=mart_row.get("score_date") if mart_row else score_date,
+        settings=settings,
     )
+    if mart_row and not metric_rows.empty:
+        scorecard = build_company_scorecard_from_gold_artifacts(
+            ticker=normalized_ticker,
+            mart_row=mart_row,
+            metric_rows=metric_rows,
+        )
+    else:
+        scorecard = build_company_scorecard(
+            ticker=normalized_ticker,
+            company_name=fundamentals_summary.get("long_name"),
+            sector=fundamentals_summary.get("sector") or security_row.get("sector"),
+            industry=fundamentals_summary.get("industry") or security_row.get("industry"),
+            score_date=score_date,
+            benchmark_comparison=benchmark_comparison,
+            risk_metrics=risk_metrics,
+            trend_metrics=trend_metrics,
+            fundamentals_summary=fundamentals_summary,
+            peer_valuation_comparison=peer_valuation_comparison,
+            primary_benchmark=resolved_primary_benchmark,
+            secondary_benchmark=(
+                benchmark_mapping_row.get("sector_benchmark")
+                or benchmark_mapping_row.get("style_benchmark")
+                or benchmark_mapping_row.get("industry_benchmark")
+                or benchmark_mapping_row.get("custom_benchmark")
+            ),
+        )
     company_sector = fundamentals_summary.get("sector") or security_row.get("sector")
     sector_snapshot_rows = (
         sector_snapshots.loc[sector_snapshots["sector"] == company_sector].copy()

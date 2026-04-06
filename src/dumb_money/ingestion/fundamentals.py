@@ -23,8 +23,12 @@ STATEMENT_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "gross_profit": ("Gross Profit",),
     "operating_income": ("Operating Income",),
     "net_income": ("Net Income", "Net Income Common Stockholders"),
+    "pretax_income": ("Pretax Income",),
+    "tax_provision": ("Tax Provision",),
+    "tax_rate_for_calcs": ("Tax Rate For Calcs",),
     "ebitda": ("EBITDA", "Normalized EBITDA"),
     "free_cash_flow": ("Free Cash Flow",),
+    "interest_expense": ("Interest Expense", "Interest Expense Non Operating"),
     "total_debt": ("Total Debt",),
     "total_cash": (
         "Cash Cash Equivalents And Short Term Investments",
@@ -32,8 +36,15 @@ STATEMENT_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
         "Cash Equivalents",
         "Cash",
     ),
+    "total_assets": ("Total Assets",),
     "current_assets": ("Current Assets",),
     "current_liabilities": ("Current Liabilities",),
+    "total_equity_gross_minority_interest": ("Total Equity Gross Minority Interest",),
+    "stockholders_equity": ("Stockholders Equity", "Common Stock Equity"),
+    "invested_capital": ("Invested Capital",),
+    "working_capital": ("Working Capital",),
+    "basic_eps": ("Basic EPS",),
+    "diluted_eps": ("Diluted EPS",),
 }
 
 
@@ -316,19 +327,33 @@ def _build_historical_records(
                 "gross_profit": row.get("gross_profit"),
                 "operating_income": row.get("operating_income"),
                 "net_income": row.get("net_income"),
+                "pretax_income": row.get("pretax_income"),
+                "tax_provision": row.get("tax_provision"),
+                "tax_rate_for_calcs": row.get("tax_rate_for_calcs"),
+                "nopat": row.get("nopat"),
                 "ebitda": row.get("ebitda"),
                 "free_cash_flow": row.get("free_cash_flow"),
+                "interest_expense": row.get("interest_expense"),
                 "total_debt": row.get("total_debt"),
                 "total_cash": row.get("total_cash"),
+                "total_assets": row.get("total_assets"),
                 "current_assets": row.get("current_assets"),
                 "current_liabilities": row.get("current_liabilities"),
+                "total_equity_gross_minority_interest": row.get("total_equity_gross_minority_interest"),
+                "stockholders_equity": row.get("stockholders_equity"),
+                "invested_capital": row.get("invested_capital"),
+                "working_capital": row.get("working_capital"),
+                "basic_eps": row.get("basic_eps"),
+                "diluted_eps": row.get("diluted_eps"),
+                "effective_tax_rate": row.get("effective_tax_rate"),
+                "return_on_invested_capital": row.get("return_on_invested_capital"),
             }
         )
         if record["period_type"] != "ttm":
             record["revenue_ttm"] = base.get("revenue_ttm") if record["period_type"] == "annual" else None
         records.append(record)
 
-    return records or [_legacy_snapshot_record(
+    return _apply_historical_metric_derivations(records) or [_legacy_snapshot_record(
         ticker,
         raw_payload,
         as_of_date=as_of_date,
@@ -336,6 +361,98 @@ def _build_historical_records(
         raw_payload_path=raw_payload_path,
         pulled_at=pulled_at,
     )]
+
+
+def _safe_ratio(numerator: Any, denominator: Any) -> float | None:
+    numerator_value = pd.to_numeric(numerator, errors="coerce")
+    denominator_value = pd.to_numeric(denominator, errors="coerce")
+    if pd.isna(numerator_value) or pd.isna(denominator_value) or float(denominator_value) == 0:
+        return None
+    return float(numerator_value) / float(denominator_value)
+
+
+def _average_period_denominator(current: Any, prior: Any) -> float | None:
+    current_value = pd.to_numeric(current, errors="coerce")
+    prior_value = pd.to_numeric(prior, errors="coerce")
+    if pd.isna(current_value):
+        return None
+    if pd.isna(prior_value):
+        return float(current_value)
+    return (float(current_value) + float(prior_value)) / 2.0
+
+
+def _resolve_effective_tax_rate(record: Mapping[str, Any]) -> float | None:
+    tax_rate_for_calcs = pd.to_numeric(record.get("tax_rate_for_calcs"), errors="coerce")
+    if pd.notna(tax_rate_for_calcs) and 0 <= float(tax_rate_for_calcs) <= 1:
+        return float(tax_rate_for_calcs)
+
+    pretax_income = pd.to_numeric(record.get("pretax_income"), errors="coerce")
+    tax_provision = pd.to_numeric(record.get("tax_provision"), errors="coerce")
+    if pd.notna(pretax_income) and pd.notna(tax_provision) and float(pretax_income) > 0:
+        derived = float(tax_provision) / float(pretax_income)
+        if 0 <= derived <= 1:
+            return derived
+    return None
+
+
+def _apply_historical_metric_derivations(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not records:
+        return records
+
+    ordered = sorted(records, key=lambda row: (str(row.get("period_type")), str(row.get("period_end_date"))))
+    prior_by_period_type: dict[str, dict[str, Any]] = {}
+
+    for record in ordered:
+        period_type = str(record.get("period_type") or "")
+        prior = prior_by_period_type.get(period_type, {})
+
+        gross_margin = _safe_ratio(record.get("gross_profit"), record.get("revenue"))
+        if gross_margin is not None:
+            record["gross_margin"] = gross_margin
+        operating_margin = _safe_ratio(record.get("operating_income"), record.get("revenue"))
+        if operating_margin is not None:
+            record["operating_margin"] = operating_margin
+        profit_margin = _safe_ratio(record.get("net_income"), record.get("revenue"))
+        if profit_margin is not None:
+            record["profit_margin"] = profit_margin
+        current_ratio = _safe_ratio(record.get("current_assets"), record.get("current_liabilities"))
+        if current_ratio is not None:
+            record["current_ratio"] = current_ratio
+
+        equity_base = record.get("stockholders_equity")
+        if equity_base is None or pd.isna(pd.to_numeric(equity_base, errors="coerce")):
+            equity_base = record.get("total_equity_gross_minority_interest")
+        debt_to_equity = _safe_ratio(record.get("total_debt"), equity_base)
+        if debt_to_equity is not None:
+            # Keep provider convention aligned with Yahoo's debt-to-equity percent-like scale.
+            record["debt_to_equity"] = debt_to_equity * 100.0
+
+        record["effective_tax_rate"] = _resolve_effective_tax_rate(record)
+        operating_income = pd.to_numeric(record.get("operating_income"), errors="coerce")
+        effective_tax_rate = pd.to_numeric(record.get("effective_tax_rate"), errors="coerce")
+        if pd.notna(operating_income) and pd.notna(effective_tax_rate):
+            record["nopat"] = float(operating_income) * (1.0 - float(effective_tax_rate))
+
+        prior_equity = prior.get("stockholders_equity")
+        if prior_equity is None or pd.isna(pd.to_numeric(prior_equity, errors="coerce")):
+            prior_equity = prior.get("total_equity_gross_minority_interest")
+        roe_denominator = _average_period_denominator(equity_base, prior_equity)
+        roa_denominator = _average_period_denominator(record.get("total_assets"), prior.get("total_assets"))
+        roic_denominator = _average_period_denominator(record.get("invested_capital"), prior.get("invested_capital"))
+
+        roe = _safe_ratio(record.get("net_income"), roe_denominator)
+        roa = _safe_ratio(record.get("net_income"), roa_denominator)
+        roic = _safe_ratio(record.get("nopat"), roic_denominator)
+        if roe is not None:
+            record["return_on_equity"] = roe
+        if roa is not None:
+            record["return_on_assets"] = roa
+        if roic is not None:
+            record["return_on_invested_capital"] = roic
+
+        prior_by_period_type[period_type] = record.copy()
+
+    return ordered
 
 
 def _collect_statement_history(
@@ -475,7 +592,19 @@ def collect_yfinance_fundamentals(ticker: str) -> dict[str, Any]:
                 key: value
                 for key, value in STATEMENT_FIELD_ALIASES.items()
                 if key
-                in {"revenue", "gross_profit", "operating_income", "net_income", "ebitda"}
+                in {
+                    "revenue",
+                    "gross_profit",
+                    "operating_income",
+                    "net_income",
+                    "pretax_income",
+                    "tax_provision",
+                    "tax_rate_for_calcs",
+                    "interest_expense",
+                    "ebitda",
+                    "basic_eps",
+                    "diluted_eps",
+                }
             },
         ).items():
             historical_rows[(period_type, period_end.isoformat())] = values
@@ -501,7 +630,17 @@ def collect_yfinance_fundamentals(ticker: str) -> dict[str, Any]:
             period_type=period_type,
             field_alias_map={
                 key: STATEMENT_FIELD_ALIASES[key]
-                for key in ("total_debt", "total_cash", "current_assets", "current_liabilities")
+                for key in (
+                    "total_debt",
+                    "total_cash",
+                    "total_assets",
+                    "current_assets",
+                    "current_liabilities",
+                    "total_equity_gross_minority_interest",
+                    "stockholders_equity",
+                    "invested_capital",
+                    "working_capital",
+                )
             },
         ).items():
             historical_rows.setdefault((period_type, period_end.isoformat()), {}).update(values)
