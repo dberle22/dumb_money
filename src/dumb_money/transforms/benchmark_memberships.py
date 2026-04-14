@@ -316,14 +316,18 @@ def build_benchmark_memberships_frame(
     frames: list[pd.DataFrame] = []
 
     for row in normalized.to_dict(orient="records"):
-        holdings, as_of_date = _parse_holdings_file(base_dir / str(row["path"]))
+        path_text = str(row.get("path") or "").strip()
+        holdings_path = base_dir / path_text if path_text else None
+        if holdings_path is None or not holdings_path.exists() or not holdings_path.is_file():
+            continue
+        holdings, as_of_date = _parse_holdings_file(holdings_path)
         if holdings.empty:
             continue
         holdings.insert(0, "benchmark_ticker", row["ticker"])
         holdings.insert(0, "benchmark_id", row["ticker"])
         holdings["as_of_date"] = as_of_date
         holdings["source"] = "benchmark_holdings_snapshot"
-        holdings["source_file"] = str(row["path"])
+        holdings["source_file"] = path_text
         frames.append(holdings[BENCHMARK_MEMBERSHIP_COLUMNS])
 
     if not frames:

@@ -21,6 +21,29 @@ from dumb_money.transforms.benchmark_memberships import (
 
 DEFAULT_PRIMARY_BENCHMARK = "SPY"
 STYLE_PROXY_BENCHMARK = "QQQ"
+SECTOR_LABEL_ALIASES = {
+    "healthcare": "health_care",
+}
+INDUSTRY_LABEL_ALIASES = {
+    "drug_manufacturers_general": "pharmaceuticals",
+    "medical_instruments_supplies": "medical_devices",
+}
+
+
+def _normalize_label(value: object, *, aliases: dict[str, str] | None = None) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if not text or text == "none":
+        return None
+
+    normalized = "".join(character if character.isalnum() else "_" for character in text)
+    normalized = "_".join(part for part in normalized.split("_") if part)
+    if not normalized:
+        return None
+    if aliases:
+        normalized = aliases.get(normalized, normalized)
+    return normalized
 
 
 def _resolve_mapping_path(
@@ -49,9 +72,12 @@ def _first_lookup(frame: pd.DataFrame, key_column: str) -> dict[str, str]:
     if frame.empty:
         return {}
     normalized = frame.copy()
-    normalized[key_column] = normalized[key_column].astype(str).str.strip()
+    aliases = SECTOR_LABEL_ALIASES if key_column == "sector" else INDUSTRY_LABEL_ALIASES
+    normalized[key_column] = normalized[key_column].map(
+        lambda value: _normalize_label(value, aliases=aliases)
+    )
     normalized["ticker"] = normalized["ticker"].astype(str).str.strip().str.upper()
-    normalized = normalized.loc[normalized[key_column] != ""].sort_values([key_column, "ticker"])
+    normalized = normalized.loc[normalized[key_column].notna()].sort_values([key_column, "ticker"])
     return (
         normalized.drop_duplicates(subset=[key_column], keep="first")
         .set_index(key_column)["ticker"]
@@ -129,8 +155,16 @@ def build_benchmark_mappings_frame(
         industry = record.get("industry")
         primary_benchmark, primary_method = _resolve_primary_benchmark(ticker, memberships, market_benchmarks)
         style_benchmark, style_method = _resolve_style_benchmark(ticker, memberships)
-        sector_benchmark = sector_lookup.get(str(sector).strip()) if sector else None
-        industry_benchmark = industry_lookup.get(str(industry).strip()) if industry else None
+        sector_benchmark = (
+            sector_lookup.get(_normalize_label(sector, aliases=SECTOR_LABEL_ALIASES))
+            if sector
+            else None
+        )
+        industry_benchmark = (
+            industry_lookup.get(_normalize_label(industry, aliases=INDUSTRY_LABEL_ALIASES))
+            if industry
+            else None
+        )
 
         method_parts = [f"primary:{primary_method}"]
         if sector_benchmark:
