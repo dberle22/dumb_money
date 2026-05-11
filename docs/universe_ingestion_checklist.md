@@ -82,7 +82,7 @@ Run the broad-benchmark batch workflow with these commands:
 Working directory:
 
 ```bash
-cd /Users/danberle/Documents/projects/dumb_money
+cd dumb_money
 ```
 
 Plan the run once:

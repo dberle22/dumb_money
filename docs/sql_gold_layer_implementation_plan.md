@@ -162,7 +162,7 @@ This is the anchor table for almost every downstream gold output:
 
 This is the first place where we need a careful Python-to-SQL translation.
 
-The current scorecard logic in [scorecard.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/analytics/scorecard.py) uses:
+The current scorecard logic in [scorecard.py](dumb_money/src/dumb_money/analytics/scorecard.py) uses:
 
 - threshold bands
 - peer-relative fallback logic for valuation

@@ -2,7 +2,7 @@
 
 Work in the `dumb_money` repo.
 
-We want to implement the `Peer Positioning` section from Sprint 6 in [project_plan.md](/Users/danberle/Documents/projects/dumb_money/docs/project_plan.md) using the same section-by-section approach we used for `Market Performance`, `Research Summary`, `Trend and Risk Profile`, `Balance Sheet Strength`, and `Valuation`.
+We want to implement the `Peer Positioning` section from Sprint 6 in [project_plan.md](dumb_money/docs/project_plan.md) using the same section-by-section approach we used for `Market Performance`, `Research Summary`, `Trend and Risk Profile`, `Balance Sheet Strength`, and `Valuation`.
 
 ## Context
 
@@ -11,29 +11,29 @@ We want to implement the `Peer Positioning` section from Sprint 6 in [project_pl
 - DuckDB remains canonical for shared analytical tables.
 - We want thin notebooks/review layers and shared reusable section logic in `src/dumb_money/...`.
 - We already took this approach for:
-  - [market_performance_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/market_performance_section.py)
-  - [research_summary_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/research_summary_section.py)
-  - [trend_risk_profile_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/trend_risk_profile_section.py)
-  - [balance_sheet_strength_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/balance_sheet_strength_section.py)
-  - [valuation_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/valuation_section.py)
+  - [market_performance_section.py](dumb_money/src/dumb_money/outputs/market_performance_section.py)
+  - [research_summary_section.py](dumb_money/src/dumb_money/outputs/research_summary_section.py)
+  - [trend_risk_profile_section.py](dumb_money/src/dumb_money/outputs/trend_risk_profile_section.py)
+  - [balance_sheet_strength_section.py](dumb_money/src/dumb_money/outputs/balance_sheet_strength_section.py)
+  - [valuation_section.py](dumb_money/src/dumb_money/outputs/valuation_section.py)
 - Use those section modules as the implementation pattern:
   explicit shared inputs, clear transformations, focused tests, saved review artifact, and inline comments that explain query, transform, and visualization steps.
 - The likely target module path for this section should be:
-  - [peer_positioning_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/peer_positioning_section.py)
+  - [peer_positioning_section.py](dumb_money/src/dumb_money/outputs/peer_positioning_section.py)
 
 ## Please do the following
 
-1. Review the Sprint 6 `Peer Positioning` section plan in [project_plan.md](/Users/danberle/Documents/projects/dumb_money/docs/project_plan.md).
-2. Review the `Peer Positioning` requirements in [stock_scorecard_visual_narrative_spec.md](/Users/danberle/Documents/projects/dumb_money/docs/stock_scorecard_visual_narrative_spec.md).
+1. Review the Sprint 6 `Peer Positioning` section plan in [project_plan.md](dumb_money/docs/project_plan.md).
+2. Review the `Peer Positioning` requirements in [stock_scorecard_visual_narrative_spec.md](dumb_money/docs/stock_scorecard_visual_narrative_spec.md).
 3. Review the current shared reporting / peer / scorecard code, especially:
-   - [company_report.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/company_report.py)
-   - [valuation_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/valuation_section.py)
-   - [research_summary_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/research_summary_section.py)
-   - [research/company.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/research/company.py)
-   - [analytics/company.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/analytics/company.py)
-   - [analytics/scorecard.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/analytics/scorecard.py)
-   - [transforms/peer_sets.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/transforms/peer_sets.py)
-4. Implement a dedicated shared section module for `Peer Positioning` at [peer_positioning_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/peer_positioning_section.py), similar in spirit to the earlier Sprint 6 section modules.
+   - [company_report.py](dumb_money/src/dumb_money/outputs/company_report.py)
+   - [valuation_section.py](dumb_money/src/dumb_money/outputs/valuation_section.py)
+   - [research_summary_section.py](dumb_money/src/dumb_money/outputs/research_summary_section.py)
+   - [research/company.py](dumb_money/src/dumb_money/research/company.py)
+   - [analytics/company.py](dumb_money/src/dumb_money/analytics/company.py)
+   - [analytics/scorecard.py](dumb_money/src/dumb_money/analytics/scorecard.py)
+   - [transforms/peer_sets.py](dumb_money/src/dumb_money/transforms/peer_sets.py)
+4. Implement a dedicated shared section module for `Peer Positioning` at [peer_positioning_section.py](dumb_money/src/dumb_money/outputs/peer_positioning_section.py), similar in spirit to the earlier Sprint 6 section modules.
 5. Make the section DuckDB-aware where relevant, but do not invent unnecessary new queries if the current canonical `peer_sets`, peer valuation comparison, peer return comparison, sector snapshot, research packet, or staged shared tables are already the correct contract.
 6. Be explicit in code about:
    - what shared inputs are used

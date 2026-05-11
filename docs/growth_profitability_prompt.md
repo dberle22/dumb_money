@@ -2,7 +2,7 @@
 
 Work in the `dumb_money` repo.
 
-We want to implement the `Growth and Profitability` section from Sprint 6 in [project_plan.md](/Users/danberle/Documents/projects/dumb_money/docs/project_plan.md) using the same section-by-section approach we used for `Market Performance`, `Research Summary`, `Trend and Risk Profile`, `Balance Sheet Strength`, `Valuation`, `Peer Positioning`, `Score Decomposition`, and `Final Research Summary`.
+We want to implement the `Growth and Profitability` section from Sprint 6 in [project_plan.md](dumb_money/docs/project_plan.md) using the same section-by-section approach we used for `Market Performance`, `Research Summary`, `Trend and Risk Profile`, `Balance Sheet Strength`, `Valuation`, `Peer Positioning`, `Score Decomposition`, and `Final Research Summary`.
 
 ## Context
 
@@ -11,40 +11,40 @@ We want to implement the `Growth and Profitability` section from Sprint 6 in [pr
 - DuckDB remains canonical for shared analytical tables.
 - We want thin notebooks/review layers and shared reusable section logic in `src/dumb_money/...`.
 - We already took this approach for:
-  - [market_performance_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/market_performance_section.py)
-  - [research_summary_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/research_summary_section.py)
-  - [trend_risk_profile_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/trend_risk_profile_section.py)
-  - [balance_sheet_strength_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/balance_sheet_strength_section.py)
-  - [valuation_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/valuation_section.py)
-  - [peer_positioning_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/peer_positioning_section.py)
-  - [score_decomposition_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/score_decomposition_section.py)
-  - [final_research_summary_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/final_research_summary_section.py)
+  - [market_performance_section.py](dumb_money/src/dumb_money/outputs/market_performance_section.py)
+  - [research_summary_section.py](dumb_money/src/dumb_money/outputs/research_summary_section.py)
+  - [trend_risk_profile_section.py](dumb_money/src/dumb_money/outputs/trend_risk_profile_section.py)
+  - [balance_sheet_strength_section.py](dumb_money/src/dumb_money/outputs/balance_sheet_strength_section.py)
+  - [valuation_section.py](dumb_money/src/dumb_money/outputs/valuation_section.py)
+  - [peer_positioning_section.py](dumb_money/src/dumb_money/outputs/peer_positioning_section.py)
+  - [score_decomposition_section.py](dumb_money/src/dumb_money/outputs/score_decomposition_section.py)
+  - [final_research_summary_section.py](dumb_money/src/dumb_money/outputs/final_research_summary_section.py)
 - Use those section modules as the implementation pattern:
   explicit shared inputs, clear transformations, focused tests, saved review artifact, and inline comments that explain query, transform, and output-assembly steps.
 - The likely target module path for this section should be:
-  - [growth_profitability_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/growth_profitability_section.py)
+  - [growth_profitability_section.py](dumb_money/src/dumb_money/outputs/growth_profitability_section.py)
 - Unlike the already-completed Sprint 6 sections, this section depends much more directly on historical fundamentals coverage and period-aware time-series contracts.
 
 ## Please do the following
 
-1. Review the Sprint 6 `Growth and Profitability` section plan in [project_plan.md](/Users/danberle/Documents/projects/dumb_money/docs/project_plan.md).
-2. Review the `Growth and Profitability` requirements in [stock_scorecard_visual_narrative_spec.md](/Users/danberle/Documents/projects/dumb_money/docs/stock_scorecard_visual_narrative_spec.md).
+1. Review the Sprint 6 `Growth and Profitability` section plan in [project_plan.md](dumb_money/docs/project_plan.md).
+2. Review the `Growth and Profitability` requirements in [stock_scorecard_visual_narrative_spec.md](dumb_money/docs/stock_scorecard_visual_narrative_spec.md).
 3. Review the current historical fundamentals and shared reporting code, especially:
-   - [company_report.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/company_report.py)
-   - [research_summary_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/research_summary_section.py)
-   - [balance_sheet_strength_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/balance_sheet_strength_section.py)
-   - [score_decomposition_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/score_decomposition_section.py)
-   - [research/company.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/research/company.py)
-   - [analytics/company.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/analytics/company.py)
-   - [analytics/scorecard.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/analytics/scorecard.py)
-   - [storage/warehouse.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/storage/warehouse.py)
+   - [company_report.py](dumb_money/src/dumb_money/outputs/company_report.py)
+   - [research_summary_section.py](dumb_money/src/dumb_money/outputs/research_summary_section.py)
+   - [balance_sheet_strength_section.py](dumb_money/src/dumb_money/outputs/balance_sheet_strength_section.py)
+   - [score_decomposition_section.py](dumb_money/src/dumb_money/outputs/score_decomposition_section.py)
+   - [research/company.py](dumb_money/src/dumb_money/research/company.py)
+   - [analytics/company.py](dumb_money/src/dumb_money/analytics/company.py)
+   - [analytics/scorecard.py](dumb_money/src/dumb_money/analytics/scorecard.py)
+   - [storage/warehouse.py](dumb_money/src/dumb_money/storage/warehouse.py)
 4. Confirm what canonical historical fundamentals contract already exists in DuckDB and shared loaders:
    - quarterly rows
    - annual rows
    - `TTM` rows
    - stable period identifiers and ordering fields
    - sufficient fields for revenue, EPS if available, operating margin, gross margin, free cash flow margin, and ROE or ROA / return-on-capital proxies
-5. If the current shared contract is sufficient, implement a dedicated shared section module for `Growth and Profitability` at [growth_profitability_section.py](/Users/danberle/Documents/projects/dumb_money/src/dumb_money/outputs/growth_profitability_section.py), similar in spirit to the earlier Sprint 6 section modules.
+5. If the current shared contract is sufficient, implement a dedicated shared section module for `Growth and Profitability` at [growth_profitability_section.py](dumb_money/src/dumb_money/outputs/growth_profitability_section.py), similar in spirit to the earlier Sprint 6 section modules.
 6. If the current shared contract is not yet sufficient, do the minimum enabling shared-model work needed first:
    - keep DuckDB canonical
    - add or refine shared loaders or transforms rather than notebook logic
