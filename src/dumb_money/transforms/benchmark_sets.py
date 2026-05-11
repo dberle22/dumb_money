@@ -9,19 +9,7 @@ import pandas as pd
 
 from dumb_money.config.settings import AppSettings, get_settings
 from dumb_money.ingestion.benchmarks import BENCHMARK_COLUMNS
-
-BENCHMARK_SET_COLUMNS = [
-    "set_id",
-    "benchmark_id",
-    "ticker",
-    "name",
-    "category",
-    "scope",
-    "currency",
-    "description",
-    "member_order",
-    "is_default",
-]
+from dumb_money.storage import BENCHMARK_SET_COLUMNS, export_table_csv, write_canonical_table
 
 
 def _resolve_benchmark_definition_paths(
@@ -79,6 +67,7 @@ def stage_benchmark_sets(
     settings: AppSettings | None = None,
     set_id: str = "default_benchmarks",
     output_name: str = "benchmark_sets.csv",
+    write_warehouse: bool = True,
     write_csv: bool = True,
 ) -> pd.DataFrame:
     settings = settings or get_settings()
@@ -91,9 +80,15 @@ def stage_benchmark_sets(
     frames = [pd.read_csv(path) for path in paths]
     benchmark_sets = build_benchmark_sets_frame(pd.concat(frames, ignore_index=True), set_id=set_id)
 
+    if write_warehouse:
+        write_canonical_table(benchmark_sets, "benchmark_sets", settings=settings)
+
     if write_csv and not benchmark_sets.empty:
-        output_path = settings.benchmark_sets_dir / output_name
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        benchmark_sets.to_csv(output_path, index=False)
+        if output_name == "benchmark_sets.csv":
+            export_table_csv(benchmark_sets, "benchmark_sets", settings=settings)
+        else:
+            output_path = settings.benchmark_sets_dir / output_name
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            benchmark_sets.to_csv(output_path, index=False)
 
     return benchmark_sets

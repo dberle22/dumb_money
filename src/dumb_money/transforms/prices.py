@@ -9,8 +9,31 @@ import pandas as pd
 
 from dumb_money.config.settings import AppSettings, get_settings
 from dumb_money.ingestion.prices import PRICE_COLUMNS, to_price_models
+from dumb_money.storage import export_table_csv, upsert_canonical_table, write_canonical_table
 
 NUMERIC_PRICE_COLUMNS = ["open", "high", "low", "close", "adj_close", "volume"]
+
+
+def _resolve_raw_price_input_paths(*, settings: AppSettings) -> list[Path]:
+    individual_paths = sorted(
+        path
+        for path in settings.raw_prices_dir.glob("*.csv")
+        if not path.name.startswith("combined_prices_")
+    )
+    if individual_paths:
+        return individual_paths
+
+    return sorted(settings.raw_prices_dir.glob("combined_prices_*.csv"))
+
+
+def _resolve_raw_benchmark_price_input_paths(*, settings: AppSettings) -> list[Path]:
+    individual_paths = sorted(
+        path
+        for path in settings.raw_benchmarks_dir.glob("*.csv")
+        if "_benchmark_prices_" not in path.name and "benchmark_definitions" not in path.name
+    )
+    combined_paths = sorted(settings.raw_benchmarks_dir.glob("*_benchmark_prices_*.csv"))
+    return list(dict.fromkeys([*individual_paths, *combined_paths]))
 
 
 def _resolve_price_input_paths(
@@ -21,11 +44,12 @@ def _resolve_price_input_paths(
     if input_paths:
         return [Path(path) for path in input_paths]
 
-    combined_paths = sorted(settings.raw_prices_dir.glob("combined_prices_*.csv"))
-    if combined_paths:
-        return combined_paths
+    paths = _resolve_raw_price_input_paths(settings=settings)
 
-    return sorted(settings.raw_prices_dir.glob("*.csv"))
+    # Benchmark ETF price extracts live under the raw benchmark directory, but they
+    # still need to land in the same canonical normalized_prices table as equities.
+    benchmark_paths = _resolve_raw_benchmark_price_input_paths(settings=settings)
+    return list(dict.fromkeys([*paths, *benchmark_paths]))
 
 
 def normalize_prices_frame(frame: pd.DataFrame) -> pd.DataFrame:
@@ -93,7 +117,9 @@ def stage_prices(
     input_paths: Sequence[str | Path] | None = None,
     settings: AppSettings | None = None,
     output_name: str = "normalized_prices.csv",
+    write_warehouse: bool = True,
     write_csv: bool = True,
+    incremental: bool = True,
 ) -> pd.DataFrame:
     """Build the normalized price staging dataset from raw CSV extracts."""
 
@@ -107,9 +133,20 @@ def stage_prices(
     frames = [pd.read_csv(path) for path in paths]
     normalized = normalize_prices_frame(pd.concat(frames, ignore_index=True))
 
-    if write_csv and not normalized.empty:
-        output_path = settings.normalized_prices_dir / output_name
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        normalized.to_csv(output_path, index=False)
+    materialized = normalized
+    if write_warehouse:
+        materialized = (
+            upsert_canonical_table(normalized, "normalized_prices", settings=settings)
+            if incremental
+            else write_canonical_table(normalized, "normalized_prices", settings=settings)
+        )
 
-    return normalized
+    if write_csv and not materialized.empty:
+        if output_name == "normalized_prices.csv":
+            export_table_csv(materialized, "normalized_prices", settings=settings)
+        else:
+            output_path = settings.normalized_prices_dir / output_name
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            materialized.to_csv(output_path, index=False)
+
+    return materialized

@@ -56,6 +56,14 @@ class AppSettings:
         return self.data_dir / "marts"
 
     @property
+    def warehouse_dir(self) -> Path:
+        return self.data_dir / "warehouse"
+
+    @property
+    def warehouse_path(self) -> Path:
+        return self.warehouse_dir / "dumb_money.duckdb"
+
+    @property
     def raw_prices_dir(self) -> Path:
         return self.raw_dir / "prices"
 
@@ -66,6 +74,14 @@ class AppSettings:
     @property
     def raw_benchmarks_dir(self) -> Path:
         return self.raw_dir / "benchmarks"
+
+    @property
+    def raw_benchmark_holdings_dir(self) -> Path:
+        return self.raw_dir / "benchmark_holdings"
+
+    @property
+    def raw_universe_dir(self) -> Path:
+        return self.raw_dir / "universe"
 
     @property
     def raw_portfolios_dir(self) -> Path:
@@ -88,8 +104,36 @@ class AppSettings:
         return self.staging_dir / "security_master"
 
     @property
+    def listed_security_seed_dir(self) -> Path:
+        return self.staging_dir / "listed_security_seed"
+
+    @property
+    def benchmark_definitions_dir(self) -> Path:
+        return self.staging_dir / "benchmark_definitions"
+
+    @property
+    def benchmark_memberships_dir(self) -> Path:
+        return self.staging_dir / "benchmark_memberships"
+
+    @property
+    def benchmark_membership_coverage_dir(self) -> Path:
+        return self.staging_dir / "benchmark_membership_coverage"
+
+    @property
+    def reference_dir(self) -> Path:
+        return self.data_dir / "reference"
+
+    @property
     def benchmark_sets_dir(self) -> Path:
         return self.staging_dir / "benchmark_sets"
+
+    @property
+    def benchmark_mappings_dir(self) -> Path:
+        return self.staging_dir / "benchmark_mappings"
+
+    @property
+    def security_ingestion_status_dir(self) -> Path:
+        return self.staging_dir / "security_ingestion_status"
 
     def validate(self) -> None:
         if self.default_price_interval not in VALID_PRICE_INTERVALS:
@@ -109,15 +153,25 @@ class AppSettings:
             self.raw_dir,
             self.staging_dir,
             self.marts_dir,
+            self.warehouse_dir,
             self.raw_prices_dir,
             self.raw_fundamentals_dir,
             self.raw_benchmarks_dir,
+            self.raw_benchmark_holdings_dir,
+            self.raw_universe_dir,
             self.raw_portfolios_dir,
             self.raw_watchlists_dir,
             self.normalized_prices_dir,
             self.normalized_fundamentals_dir,
             self.security_master_dir,
+            self.listed_security_seed_dir,
+            self.benchmark_definitions_dir,
+            self.benchmark_memberships_dir,
+            self.benchmark_membership_coverage_dir,
             self.benchmark_sets_dir,
+            self.benchmark_mappings_dir,
+            self.security_ingestion_status_dir,
+            self.reference_dir,
         )
 
     def default_price_window(self) -> tuple[date, date]:

@@ -56,6 +56,12 @@ def build_price_filename(label: str, start_date: date | str, end_date: date | st
     return f"{label.lower()}_{clean_start}_{clean_end}_{interval}.csv"
 
 
+def to_yahoo_symbol(ticker: str) -> str:
+    """Translate a canonical ticker into the symbol format expected by Yahoo providers."""
+
+    return str(ticker).strip().upper().replace(".", "-")
+
+
 def normalize_price_history_frame(
     frame: pd.DataFrame,
     ticker: str,
@@ -134,7 +140,8 @@ def download_prices_yahooquery(
 ) -> pd.DataFrame:
     from yahooquery import Ticker
 
-    ticker_client = Ticker(ticker)
+    provider_ticker = to_yahoo_symbol(ticker)
+    ticker_client = Ticker(provider_ticker)
     history = ticker_client.history(start=str(start_date), end=str(end_date), interval=interval)
     if history is None or history.empty:
         return pd.DataFrame(columns=PRICE_COLUMNS)
@@ -156,8 +163,9 @@ def download_prices_yfinance(
 ) -> pd.DataFrame:
     import yfinance as yf
 
+    provider_ticker = to_yahoo_symbol(ticker)
     history = yf.download(
-        ticker,
+        provider_ticker,
         start=str(start_date),
         end=str(end_date),
         interval=interval,
@@ -272,3 +280,61 @@ def ingest_prices(
         )
 
     return combined
+
+
+def ingest_selected_prices(
+    *,
+    start_date: date | str,
+    end_date: date | str,
+    tickers: Sequence[str] | None = None,
+    ticker_query_sql: str | None = None,
+    interval: str = "1d",
+    settings: AppSettings | None = None,
+    save_individual: bool = True,
+    save_combined: bool = True,
+) -> pd.DataFrame:
+    """Ingest prices for a resolved ticker universe."""
+
+    settings = settings or get_settings()
+    from dumb_money.universe import resolve_ticker_universe
+
+    resolved_tickers = resolve_ticker_universe(
+        tickers=tickers,
+        ticker_query_sql=ticker_query_sql,
+        settings=settings,
+    )
+    return ingest_prices(
+        resolved_tickers,
+        start_date=start_date,
+        end_date=end_date,
+        interval=interval,
+        settings=settings,
+        save_individual=save_individual,
+        save_combined=save_combined,
+    )
+
+
+def ingest_benchmark_member_prices(
+    benchmark_ticker: str,
+    *,
+    start_date: date | str,
+    end_date: date | str,
+    interval: str = "1d",
+    settings: AppSettings | None = None,
+    save_individual: bool = True,
+    save_combined: bool = True,
+) -> pd.DataFrame:
+    """Ingest prices for the real-security members of a staged benchmark."""
+
+    settings = settings or get_settings()
+    from dumb_money.universe import build_benchmark_member_ticker_sql
+
+    return ingest_selected_prices(
+        start_date=start_date,
+        end_date=end_date,
+        ticker_query_sql=build_benchmark_member_ticker_sql(benchmark_ticker),
+        interval=interval,
+        settings=settings,
+        save_individual=save_individual,
+        save_combined=save_combined,
+    )

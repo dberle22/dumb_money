@@ -32,11 +32,16 @@ dist/
 
 # Local app/report outputs
 reports/generated/
+reports/templates/
 
 # Data artifacts
 data/raw/
+data/runs/basket_ingestion/
 data/staging/
 data/marts/
+data/warehouse/dumb_money.duckdb
+data/reference/curated_peer_sets.csv
+data/reference/security_master_overrides.csv
 
 # Imported legacy repo content
 legacy/

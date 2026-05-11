@@ -5,6 +5,8 @@ description = "Modular investment research tool for company analysis, sector con
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "duckdb>=1.5",
+    "openpyxl>=3.1",
     "pandas>=2.2",
     "pydantic>=2.8",
     "yfinance>=0.2.65",
