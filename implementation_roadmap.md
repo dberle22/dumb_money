@@ -1,5 +1,9 @@
 # Dumb Money Implementation Roadmap
 
+> **Status note (2026-06-17):** Sprints 0–6 are complete. The roadmap below preserves the original migration and build history. Active planning for the next phase of work — the three-lens evaluation framework, decision brief, and data sprint — lives in [docs/project_plan.md](./docs/project_plan.md). The framework design is documented in [framework.md](./framework.md) and the decision brief format is in [docs/decision_brief_template.md](./docs/decision_brief_template.md).
+
+---
+
 ## Purpose
 
 This roadmap translates the goals in [tool_overview_analysis.md](./tool_overview_analysis.md) into a practical migration and build plan for the consolidated `dumb_money` repo.

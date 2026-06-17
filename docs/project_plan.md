@@ -57,13 +57,16 @@ Assessment date: `2026-04-06`
 | 0 | Repo consolidation | Phase 0 | Done | Clean repo with one package structure and one dependency flow |
 | 1 | Shared ingestion foundation | Phase 1 | Done | Reusable config, schemas, and ingestion entry points |
 | 2 | Normalized staging layer | Phase 2 | Done | Canonical datasets for prices, fundamentals, security master, and benchmarks |
-| 3 | Company research MVP | Phase 3 | In Progress | First end-to-end single-company research packet |
+| 3 | Company research MVP | Phase 3 | Done | First end-to-end single-company research packet |
 | 4 | Data foundation expansion | Phase 3 foundation | Done | Scalable shared datasets, benchmark mappings, and DuckDB storage |
 | 5 | Sector and peer research MVP | Phase 4 | Done | Sector context and peer-relative research outputs |
 | 6 | Reporting standardization | Phase 6 | Done | Repeatable report exports, scorecards, and chart helpers |
 | 7 | Portfolio fit MVP | Phase 5 | Not Started | Holdings import and candidate fit analysis on shared data |
 | 8 | App layer MVP | Phase 7 | Not Started | Local Streamlit app powered by shared modules |
 | 9 | LLM summaries | Phase 8 | Not Started | Narrative summaries generated from structured outputs |
+| 10 | Data sprint — estimates, short interest, DCF config | Framework pre-req | Not Started | Forward estimates, short interest, and DCF config ingested and queryable |
+| 11 | Three-lens evaluation framework | Framework core | Not Started | Value, Growth, Momentum lenses + narrative synthesis layer |
+| 12 | Decision brief report | Framework output | Not Started | Two-page PDF decision brief generated from lens verdicts + DCF + portfolio overlay |
 
 ## Phase Map
 
@@ -983,6 +986,151 @@ The MVP is complete when the repo can:
 - evaluate a candidate security for portfolio fit
 - generate repeatable notebook or report outputs from shared modules
 
+## Sprint 10: Data Sprint — Forward Estimates, Short Interest, and DCF Inputs
+
+**Status:** Not Started
+
+**Goal**
+
+Ingest the remaining data needed to run the three-lens evaluation framework. This sprint is a prerequisite for all lens-building work.
+
+**Planned Outputs**
+
+- FMP forward estimates ingestion module (`ingestion/estimates.py`)
+- Short interest ingestion module (`ingestion/short_interest.py`)
+- DCF config defaults in `settings.py`
+- Confirmed volume coverage validation
+- Net debt derivation confirmed from existing balance sheet fields
+
+**Tasks**
+
+- [ ] add FMP API client and ingest forward EPS, forward revenue, and earnings revision counts (up/down over 90 days) per ticker
+- [ ] store forward estimates alongside fundamentals in DuckDB with a `snapshot_date` field
+- [ ] ingest FINRA short interest flat files (twice-monthly) and normalize into a `short_interest` table
+- [ ] add `discount_rate` and `terminal_growth_rate` to `AppSettings` with sensible defaults (8% and 3%)
+- [ ] confirm volume is non-null across the maintained universe in `normalized_prices`
+- [ ] confirm net debt (total debt - cash) is derivable from existing `normalized_fundamentals` fields and document the formula
+
+**Acceptance Criteria**
+
+- forward estimates are queryable by ticker and snapshot date from DuckDB
+- short interest is queryable by ticker and report date
+- DCF config defaults are documented and accessible from `AppSettings`
+- volume coverage confirmed with a validation query or test
+
+**Notes**
+
+- FMP free tier: 250 calls/day, 5/min — sufficient for a personal watchlist
+- Short interest source: FINRA OTC and exchange files, published twice monthly, no API key required
+- Forward estimates replace the historical FCF CAGR proxy once ingested; the DCF can fall back to historical CAGR if forward estimates are unavailable for a ticker
+
+---
+
+## Sprint 11: Three-Lens Evaluation Framework
+
+**Status:** Not Started
+
+**Goal**
+
+Build the Value, Growth, and Momentum lens modules and the narrative synthesis layer. This is the core analytical framework upgrade from the existing scorecard model.
+
+**Depends On:** Sprint 10 (forward estimates, short interest, DCF config)
+
+**Planned Outputs**
+
+- `analytics/value_lens.py` — Value lens with DCF, EV/EBITDA vs peers, P/FCF, margin of safety
+- `analytics/growth_lens.py` — Growth lens with revenue CAGR, PEG, earnings revisions, margin trends
+- `analytics/momentum_lens.py` — Momentum lens with relative strength, MA signals, short interest, volume trend
+- `LensVerdict` dataclass (shared across lenses)
+- `analytics/synthesis.py` — Narrative synthesis layer
+- Bear case checks embedded in each lens
+- Tests for each lens module
+
+**Key Design Decisions (locked)**
+
+- Each lens produces an independent `LensVerdict` — no composite score across lenses
+- Bear case logic lives inside each lens, not in a separate module
+- Synthesis is narrative, not a lookup table of predefined patterns
+- Lens modules are separate files — `value_lens.py`, `growth_lens.py`, `momentum_lens.py`
+- A conviction vs. opportunistic framing layer is added to the synthesis output — same analysis, different framing applied on top
+
+**`LensVerdict` dataclass (starting point)**
+
+```python
+@dataclass
+class LensVerdict:
+    lens: str                    # "value" | "growth" | "momentum"
+    verdict: str                 # e.g. "Undervalued", "High quality", "Strong"
+    confidence: str              # "High" | "Medium" | "Low"
+    key_evidence: list[str]      # 2-3 bullet points supporting the verdict
+    bear_case: str               # one paragraph — what would have to be true for this to be wrong
+    metrics: dict[str, Any]      # raw metric inputs used to reach the verdict
+```
+
+**Tasks**
+
+- [ ] define `LensVerdict` dataclass in a shared models file
+- [ ] implement `analytics/value_lens.py`: DCF intrinsic value (base/bull/bear), EV/EBITDA vs peer median, P/FCF, P/B, margin of safety, value trap check
+- [ ] implement `analytics/growth_lens.py`: revenue CAGR (1/3/5yr), PEG, gross/op margin trends, earnings revision direction, R&D/capex signal, implied growth rate back-solve
+- [ ] implement `analytics/momentum_lens.py`: relative strength vs sector ETF and SPY over 1/3/6/12m, 50/200d MA signals, volume-weighted trend, short interest level and trend, earnings surprise history
+- [ ] implement `analytics/synthesis.py`: accepts three `LensVerdict` objects, produces a narrative synthesis with agreement/conflict mapping and conviction vs. opportunistic framing
+- [ ] add focused tests for each lens module
+
+**Acceptance Criteria**
+
+- each lens can be run independently on a single ticker and return a `LensVerdict`
+- bear case is populated for every verdict, not left empty
+- synthesis produces a readable narrative that surfaces where lenses agree and where they conflict
+- framing layer describes how the thesis reads under conviction vs. opportunistic assumptions
+
+---
+
+## Sprint 12: Decision Brief Report
+
+**Status:** Not Started
+
+**Goal**
+
+Build the new two-page PDF decision brief as a standalone report, separate from the existing company report. Uses lens verdicts, DCF price target range, and portfolio overlay as inputs.
+
+**Depends On:** Sprint 11 (lens architecture), Sprint 7 (portfolio data)
+
+**Reference:** [docs/decision_brief_template.md](./decision_brief_template.md)
+
+**Planned Outputs**
+
+- `outputs/decision_brief.py` — assembles and renders the two-page brief
+- Price target range (bear/base/bull) generated from DCF scenarios
+- Portfolio overlay section (position size %, sector concentration, correlated holdings)
+- Thesis check section with auto-populated revisit date (90 days default)
+- Key metrics table (valuation, growth, balance sheet columns)
+
+**Key Design Decisions (locked)**
+
+- New file, not a retrofit of existing `company_report.py`
+- Verdict-first format: verdict and price target range on page 1, monitoring and data table on page 2
+- Prose primary with a structured data table on page 2
+- Price target range generated mechanically from DCF; the narrative for each scenario is written by the user
+- The metrics table includes balance sheet fields to build reading habits over time
+
+**Tasks**
+
+- [ ] implement DCF calculation using `AppSettings` discount rate and terminal growth rate defaults, with bear/base/bull scenario variants
+- [ ] implement `outputs/decision_brief.py` following the template in `docs/decision_brief_template.md`
+- [ ] add portfolio overlay section using holdings data from Sprint 7
+- [ ] add 90-day revisit date auto-population
+- [ ] save a generated AAPL example brief under `reports/generated/`
+- [ ] add tests for DCF calculation, margin of safety math, and brief assembly
+
+**Acceptance Criteria**
+
+- brief renders as a clean two-page PDF for AAPL end to end
+- price target range is generated from DCF with visible assumptions
+- portfolio section populates from holdings data when available, degrades gracefully when not
+- metrics table includes all planned fields
+
+---
+
 ## Update Log
 
 | Date | Update | Owner |
@@ -991,3 +1139,4 @@ The MVP is complete when the repo can:
 | 2026-04-04 | Expanded Sprint 6 into a section-by-section reporting plan with single-file-per-section review workflow | Codex |
 | 2026-04-05 | Marked Sprint 6 as in progress and recorded completed section modules for Market Performance, Research Summary, Trend and Risk Profile, and Balance Sheet Strength | Codex |
 | 2026-04-05 | Marked Sprint 6 Valuation complete, documented the new valuation section artifact, and recorded the canonical `peer_sets.peer_source` contract for automatic versus curated peers | Codex |
+| 2026-06-17 | Added Sprints 10–12 reflecting the three-lens evaluation framework, data sprint, and decision brief from framework.md design session | Dan |
