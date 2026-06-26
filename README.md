@@ -84,13 +84,19 @@ Run linting:
 python -m ruff check .
 ```
 
-## Planning Docs
+## Docs
 
-- [IMPLEMENTATION_ROADMAP.md](./IMPLEMENTATION_ROADMAP.md)
-- [docs/project_plan.md](./docs/project_plan.md)
-- [docs/data_models.md](./docs/data_models.md)
-- [docs/architecture.md](./docs/architecture.md)
-- [docs/workflows.md](./docs/workflows.md)
+| Doc | Purpose |
+|---|---|
+| [framework.md](./framework.md) | Investment philosophy, four product modes, three-lens design |
+| [function_guide_and_implementation.md](./function_guide_and_implementation.md) | API surface, models, code examples |
+| [docs/project_plan.md](./docs/project_plan.md) | Sprint tracker — what's done and what's next |
+| [docs/architecture.md](./docs/architecture.md) | Module map, data flow, storage strategy |
+| [docs/data_models.md](./docs/data_models.md) | Canonical table schemas and field definitions |
+| [docs/workflows.md](./docs/workflows.md) | Repeatable CLI and Python command sequences |
+| [docs/decision_brief_template.md](./docs/decision_brief_template.md) | Two-page decision brief format |
+| [docs/stock_scorecard_spec.md](./docs/stock_scorecard_spec.md) | Scorecard metric definitions and scoring bands |
+| [docs/universe_ingestion_checklist.md](./docs/universe_ingestion_checklist.md) | Step-by-step checklist for ingesting a new benchmark universe |
 
 ## Current Notes
 
