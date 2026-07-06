@@ -97,5 +97,7 @@ analytics/
 A shared `LensVerdict` dataclass will carry each lens output into a narrative synthesis layer (`analytics/synthesis.py`). The synthesis feeds the decision brief report (`outputs/decision_brief.py`).
 
 New ingestion modules will also be added:
-- `ingestion/estimates.py` — FMP forward estimates and earnings revision counts
+- `ingestion/estimates.py` — yfinance estimate endpoints (forward EPS/revenue, revision counts, earnings surprise history, price targets)
 - `ingestion/short_interest.py` — FINRA twice-monthly short interest files
+
+See [data_sources.md](data_sources.md) for a full catalog of data types, sources, availability status, and KPI mappings.

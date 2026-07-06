@@ -994,35 +994,95 @@ The MVP is complete when the repo can:
 
 Ingest the remaining data needed to run the three-lens evaluation framework. This sprint is a prerequisite for all lens-building work.
 
+**Sub-Sprints / Workstreams**
+
+1. Forward estimates foundation:
+   build a separate canonical `forward_estimates` dataset with quarterly and annual support, snapshot history, and shared loader helpers for Sprint 11
+2. FINRA short-interest foundation:
+   ingest local FINRA source files first, normalize them into a reusable `short_interest` dataset, and store derived fields needed by the momentum lens
+3. DCF and growth configuration:
+   add explicit DCF assumptions to `AppSettings`, support scenario-friendly configuration, and confirm forward estimates can later replace the historical FCF growth proxy
+4. QA and validation:
+   add lightweight reusable checks for price-volume coverage, net debt derivation, estimate coverage, and ticker-join integrity
+
 **Planned Outputs**
 
-- FMP forward estimates ingestion module (`ingestion/estimates.py`)
+- yfinance estimates ingestion module (`ingestion/estimates.py`) — wraps yfinance estimate endpoints
+- Forward estimates staging module and canonical DuckDB table (`transforms/estimates.py`, `forward_estimates`)
+- Forward-estimates query helpers for ticker, snapshot, and period joins
 - Short interest ingestion module (`ingestion/short_interest.py`)
-- DCF config defaults in `settings.py`
+- Short-interest staging module and canonical DuckDB table (`transforms/short_interest.py`, `short_interest`)
+- DCF config defaults and scenario-friendly assumption structure in `settings.py`
+- CLI entry points for estimates ingestion, short-interest ingestion, and simple validation workflows
 - Confirmed volume coverage validation
-- Net debt derivation confirmed from existing balance sheet fields
+- Net debt derivation confirmed from existing balance sheet fields and staged as a reusable derived metric
+- Lightweight coverage and join QA for Sprint 11 handoff
 
 **Tasks**
 
-- [ ] add FMP API client and ingest forward EPS, forward revenue, and earnings revision counts (up/down over 90 days) per ticker
-- [ ] store forward estimates alongside fundamentals in DuckDB with a `snapshot_date` field
-- [ ] ingest FINRA short interest flat files (twice-monthly) and normalize into a `short_interest` table
-- [ ] add `discount_rate` and `terminal_growth_rate` to `AppSettings` with sensible defaults (8% and 3%)
-- [ ] confirm volume is non-null across the maintained universe in `normalized_prices`
-- [ ] confirm net debt (total debt - cash) is derivable from existing `normalized_fundamentals` fields and document the formula
+- Forward estimates:
+  - [ ] implement yfinance estimate ingestion using `t.earnings_estimate`, `t.revenue_estimate`, `t.eps_revisions`, `t.eps_trend`, `t.earnings_history`, and `t.analyst_price_targets` per ticker
+  - [ ] save raw estimate payloads under `data/raw/estimates/` with `snapshot_date` metadata for reproducibility and QA
+  - [ ] define a separate canonical `forward_estimates` table in DuckDB rather than extending `normalized_fundamentals`
+  - [ ] support both quarterly and annual estimate periods in the canonical schema
+  - [ ] include join-friendly fields such as `ticker`, `snapshot_date`, `period_type`, `fiscal_year`, `fiscal_quarter`, and `period_end_date`
+  - [ ] preserve estimate history across snapshots rather than only the latest estimate state
+  - [ ] stage forward estimates into DuckDB and CSV exports through a shared transform path
+  - [ ] add shared loader/query helpers for latest estimate lookup and quarter-aware joins back to fundamentals
+- FINRA short interest:
+  - [ ] implement a local-first raw ingestion flow for FINRA short-interest source files under `data/raw/short_interest/`
+  - [ ] normalize short-interest source files into a separate canonical `short_interest` table keyed by `ticker` and `report_date`
+  - [ ] capture source timing metadata including report date, settlement date where available, and publication date where available
+  - [ ] derive and store downstream-ready short-interest fields such as `short_interest_change`, `short_interest_change_pct`, `days_to_cover`, and `short_interest_pct_float` when source coverage supports them
+  - [ ] add shared loader/query helpers for latest short-interest lookup and history retrieval by ticker
+  - [ ] leave automated FINRA download work as a follow-up after the local-first contract is stable
+- DCF and growth configuration:
+  - [ ] add `dcf_discount_rate` and `dcf_terminal_growth_rate` defaults to `AppSettings` with initial defaults of `8%` and `3%`
+  - [ ] structure DCF assumptions so bear/base/bull scenario overrides can be added or changed without refactoring downstream lens code
+  - [ ] confirm and document the planned DCF fallback order: use forward estimates when available, otherwise fall back to historical FCF CAGR
+  - [ ] derive and stage `net_debt = total_debt - total_cash` as a reusable metric for later value-lens logic
+- QA and validation:
+  - [ ] add a lightweight validation workflow to confirm `volume` coverage across the maintained universe in `normalized_prices`
+  - [ ] add a lightweight validation workflow to confirm `net_debt` coverage from staged fundamentals
+  - [ ] add a lightweight validation workflow to report forward-estimate coverage by ticker, snapshot date, and period type
+  - [ ] add a lightweight validation workflow to report short-interest ticker join coverage against `security_master`
+  - [ ] add tests covering canonical schema contracts, history preservation, and basic loader behavior for both new datasets
+  - [ ] add CLI entry points for estimates ingestion, short-interest ingestion, and simple validation runs for consistency with existing workflows
 
 **Acceptance Criteria**
 
-- forward estimates are queryable by ticker and snapshot date from DuckDB
-- short interest is queryable by ticker and report date
-- DCF config defaults are documented and accessible from `AppSettings`
-- volume coverage confirmed with a validation query or test
+- forward estimates are queryable from DuckDB by ticker, snapshot date, and reporting period, with both quarterly and annual support
+- forward estimates remain a separate canonical dataset from `normalized_fundamentals`, but can be joined back on ticker and quarter-aware keys
+- short interest is queryable by ticker and report date from DuckDB and includes derived fields needed by the momentum lens where source coverage allows
+- DCF config defaults are documented and accessible from `AppSettings`, and the config shape can support scenario overrides without redesign
+- net debt is available as a shared derived metric rather than an implicit downstream calculation only
+- volume coverage is confirmed with a reusable validation query or test
+- Sprint 11 can consume shared helper functions rather than rebuilding direct DuckDB query logic for these datasets
 
 **Notes**
 
-- FMP free tier: 250 calls/day, 5/min — sufficient for a personal watchlist
+- Data source decision (2026-06-27): FMP is not needed for forward estimates. yfinance already provides all required estimate data via unused endpoints: `t.earnings_estimate`, `t.revenue_estimate`, `t.eps_revisions`, `t.eps_trend`, `t.earnings_history`, `t.analyst_price_targets`, and `t.recommendations_summary`. No API key or rate limits. See [data_sources.md](data_sources.md) for full details
 - Short interest source: FINRA OTC and exchange files, published twice monthly, no API key required
+- Forward estimates should remain separate from historical company-reported fundamentals because they have a different source cadence, QA surface, and history model
 - Forward estimates replace the historical FCF CAGR proxy once ingested; the DCF can fall back to historical CAGR if forward estimates are unavailable for a ticker
+- Local-first short-interest ingestion comes first; automated file retrieval can be added after the file contract is stable and verified on the watchlist workflow
+
+**Recommended Build Order**
+
+1. extend shared configuration and warehouse metadata first:
+   add `AppSettings` support for FMP credentials and DCF defaults, then register canonical DuckDB table specs and incremental keys for `forward_estimates` and `short_interest`
+2. define canonical schema contracts before ingestion logic:
+   add explicit model and column definitions for `forward_estimates` and `short_interest`, including derived fields, snapshot history fields, and quarter-aware join keys
+3. build the forward-estimates path end to end:
+   implement raw FMP ingestion for a small watchlist, normalize and stage the data into DuckDB and CSV, then add shared loader helpers for latest-estimate and period-join workflows
+4. build the FINRA short-interest path end to end:
+   implement local-file ingestion, normalize and stage the data into DuckDB and CSV, then add shared loader helpers for latest-short-interest and history workflows
+5. add reusable derived-metric support needed by Sprint 11:
+   materialize `net_debt` from staged fundamentals and confirm the planned DCF fallback path from forward estimates to historical FCF CAGR
+6. wire everything into the CLI after shared modules exist:
+   add command entry points for estimates ingestion, short-interest ingestion, and lightweight validation runs so the interface stays consistent with the existing repo workflow
+7. finish with lightweight QA and contract tests:
+   add validation workflows for volume coverage, net-debt coverage, estimate coverage, and short-interest join coverage, plus tests for schema contracts, history preservation, and loader behavior
 
 ---
 
