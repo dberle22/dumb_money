@@ -10,10 +10,23 @@ import duckdb
 import pandas as pd
 
 from dumb_money.config import AppSettings, get_settings
-from dumb_money.ingestion.benchmarks import BENCHMARK_COLUMNS
-from dumb_money.ingestion.fundamentals import SNAPSHOT_COLUMNS
-from dumb_money.ingestion.prices import PRICE_COLUMNS
-from dumb_money.models import Security
+from dumb_money.models import BenchmarkDefinition, FundamentalSnapshot, Holding, Security
+
+PRICE_COLUMNS = [
+    "ticker",
+    "date",
+    "interval",
+    "source",
+    "currency",
+    "open",
+    "high",
+    "low",
+    "close",
+    "adj_close",
+    "volume",
+]
+SNAPSHOT_COLUMNS = list(FundamentalSnapshot.model_fields.keys())
+BENCHMARK_COLUMNS = list(BenchmarkDefinition.model_fields.keys())
 
 BENCHMARK_SET_COLUMNS = [
     "set_id",
@@ -268,6 +281,7 @@ SECURITY_MASTER_OVERRIDE_COLUMNS = [
 ]
 
 SECURITY_COLUMNS = list(Security.model_fields.keys())
+PORTFOLIO_HOLDING_COLUMNS = list(Holding.model_fields.keys())
 
 LEGACY_CSV_DEFAULTS: dict[str, dict[str, object]] = {
     "normalized_fundamentals": {
@@ -327,7 +341,15 @@ LEGACY_CSV_DEFAULTS: dict[str, dict[str, object]] = {
         "first_seen_at": None,
         "last_updated_at": None,
         "notes": None,
-    }
+    },
+    "portfolio_holdings": {
+        "portfolio_id": "default",
+        "average_cost": None,
+        "market_value": None,
+        "weight": None,
+        "account_name": None,
+        "notes": None,
+    },
 }
 
 
@@ -416,6 +438,13 @@ CANONICAL_DUCKDB_TABLES: dict[str, WarehouseTableSpec] = {
         csv_file_name="benchmark_mappings.csv",
         description="Canonical benchmark assignment table for shared company and sector workflows.",
     ),
+    "portfolio_holdings": WarehouseTableSpec(
+        table_name="portfolio_holdings",
+        columns=tuple(PORTFOLIO_HOLDING_COLUMNS),
+        csv_dir_attr="staging_dir",
+        csv_file_name="portfolio_holdings/portfolio_holdings.csv",
+        description="Canonical portfolio holdings table for portfolio-fit workflows.",
+    ),
     "peer_sets": WarehouseTableSpec(
         table_name="peer_sets",
         columns=tuple(PEER_SET_COLUMNS),
@@ -462,6 +491,7 @@ CANONICAL_DUCKDB_TABLES: dict[str, WarehouseTableSpec] = {
 CANONICAL_INCREMENTAL_KEYS: dict[str, tuple[str, ...]] = {
     "normalized_prices": ("ticker", "date", "interval", "source"),
     "normalized_fundamentals": ("ticker", "period_end_date", "period_type", "as_of_date"),
+    "portfolio_holdings": ("portfolio_id", "ticker", "as_of_date", "account_name"),
     "gold_scorecard_metric_rows": ("ticker", "score_date", "metric_id"),
 }
 

@@ -1,5 +1,17 @@
 # Gold Layer Proposal For Broad Stock Analysis
 
+## Scope Note
+
+This proposal describes the long-term direction of the stock-analysis gold layer. It should not be read as a prerequisite that must be completed before the next product-facing sprints.
+
+Near-term implementation priority is:
+
+1. finish Sprint 7 portfolio foundation work
+2. complete Sprint 10-12 for the new single-ticker framework and decision brief
+3. evolve the current gold mart into a broader SQL-first gold surface in parallel or immediately after those handoffs are stable
+
+That means the current `gold_ticker_metrics_mart` should be treated as the starting hub to evolve from, not as throwaway work that must be replaced before any lens or brief work can begin.
+
 ## Why This Needs To Change
 
 The current gold layer is useful for single-ticker report assembly, but it is still shaped around the most recently run stock:
@@ -58,6 +70,7 @@ Why it belongs in gold:
 
 Notes:
 - rename or version `gold_ticker_metrics_mart` into this contract rather than introducing a redundant second snapshot table
+- if the existing mart can be cleaned up and repurposed into this contract, prefer that path over creating a parallel competing snapshot table
 - this table should contain all eligible tickers for a given run, not only the focal ticker
 
 ### 2. `gold_scorecard_metric_rows`

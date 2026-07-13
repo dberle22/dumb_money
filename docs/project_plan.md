@@ -843,15 +843,15 @@ Use the now-mature shared data foundation and reporting layer to analyze a curre
 
 **Tasks**
 
-- [ ] finalize holdings schema implementation in code
-- [ ] create holdings import workflow for file-based inputs
-- [ ] build allocation and concentration metrics
-- [ ] build exposure metrics by sector, industry, and position weight where data allows
-- [ ] implement portfolio versus benchmark comparison
-- [ ] implement candidate ticker fit logic against current holdings
-- [ ] define watchlist output structure and scoring fields
-- [ ] create notebook in `notebooks/04_portfolio_fit/`
-- [ ] add tests for holdings parsing and portfolio metric calculations
+- [x] finalize holdings schema implementation in code
+- [x] create holdings import workflow for file-based inputs
+- [x] build allocation and concentration metrics
+- [x] build exposure metrics by sector, industry, and position weight where data allows
+- [x] implement portfolio versus benchmark comparison
+- [x] implement candidate ticker fit logic against current holdings
+- [x] define watchlist output structure and scoring fields
+- [x] create notebook in `notebooks/04_portfolio_fit/`
+- [x] add tests for holdings parsing and portfolio metric calculations
 
 **Acceptance Criteria**
 
@@ -1070,11 +1070,11 @@ Ingest the remaining data needed to run the three-lens evaluation framework. Thi
 **Recommended Build Order**
 
 1. extend shared configuration and warehouse metadata first:
-   add `AppSettings` support for FMP credentials and DCF defaults, then register canonical DuckDB table specs and incremental keys for `forward_estimates` and `short_interest`
+   add `AppSettings` support for DCF defaults and optional estimate-provider fallback settings, then register canonical DuckDB table specs and incremental keys for `forward_estimates` and `short_interest`
 2. define canonical schema contracts before ingestion logic:
    add explicit model and column definitions for `forward_estimates` and `short_interest`, including derived fields, snapshot history fields, and quarter-aware join keys
 3. build the forward-estimates path end to end:
-   implement raw FMP ingestion for a small watchlist, normalize and stage the data into DuckDB and CSV, then add shared loader helpers for latest-estimate and period-join workflows
+   implement raw yfinance estimate ingestion for a small watchlist, normalize and stage the data into DuckDB and CSV, then add shared loader helpers for latest-estimate and period-join workflows
 4. build the FINRA short-interest path end to end:
    implement local-file ingestion, normalize and stage the data into DuckDB and CSV, then add shared loader helpers for latest-short-interest and history workflows
 5. add reusable derived-metric support needed by Sprint 11:
@@ -1155,6 +1155,8 @@ Build the new two-page PDF decision brief as a standalone report, separate from 
 
 **Depends On:** Sprint 11 (lens architecture), Sprint 7 (portfolio data)
 
+**Execution Order Note:** complete Sprint 7 before starting Sprint 12 so the portfolio overlay can be implemented intentionally rather than as a placeholder.
+
 **Reference:** [docs/decision_brief_template.md](./decision_brief_template.md)
 
 **Planned Outputs**
@@ -1168,6 +1170,7 @@ Build the new two-page PDF decision brief as a standalone report, separate from 
 **Key Design Decisions (locked)**
 
 - New file, not a retrofit of existing `company_report.py`
+- Reuse the shared data loaders, rendering helpers, and lessons from the Sprint 6 report foundation where helpful, but keep the decision brief as a distinct output contract
 - Verdict-first format: verdict and price target range on page 1, monitoring and data table on page 2
 - Prose primary with a structured data table on page 2
 - Price target range generated mechanically from DCF; the narrative for each scenario is written by the user

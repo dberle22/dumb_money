@@ -2,13 +2,24 @@
 
 This document defines the first canonical schemas for the shared data foundation. The goal is to keep the MVP local-first while giving downstream analytics a stable contract and a storage path that can scale beyond CSV-only workflows.
 
+## How To Read This Doc
+
+This document intentionally mixes two kinds of information:
+
+- current implemented contracts:
+  schemas and storage patterns that already exist in code or are treated as canonical today
+- next-step target contracts:
+  planned extensions that clarify where the data model is going next, especially for broader universe support and the three-lens framework
+
+When a section describes a "current" contract and then lists "recommended next-step" additions, treat the current contract as the active implementation baseline and the next-step material as roadmap guidance rather than a claim that the extension is already finished.
+
 ## Design Rules
 
 - Raw provider payloads stay in `data/raw/...`
 - Canonical tabular outputs use snake_case field names
 - Tickers and currencies are stored uppercase
 - Prices are stored one row per ticker-date observation
-- Fundamentals are stored as point-in-time snapshots, one row per ticker and `as_of_date`
+- Fundamentals are stored as period-aware snapshots, with the active canonical contract centered on one row per `ticker x period_end_date x period_type x as_of_date`
 - Holdings are stored as portfolio positions, one row per ticker and `as_of_date`
 - CSV extracts remain useful for inspection and interchange, but DuckDB should become the canonical analytical storage layer for normalized and derived datasets
 
@@ -199,7 +210,7 @@ Stored columns:
 
 Conventions:
 
-- one row per ticker per pull date
+- current canonical contract: one row per ticker-period snapshot, with `as_of_date`, `period_end_date`, and `period_type` preserved together
 - flattened from provider payload blocks such as `price`, `summary_detail`, `key_stats`, `financial_data`, and `asset_profile`
 - preserves a pointer to the raw JSON payload so later transforms remain auditable
 
@@ -210,7 +221,7 @@ Expected raw file layout:
 
 ### Historical Fundamentals Expansion
 
-The current latest-snapshot model is enough for point-in-time scorecards, but not enough for historical balance sheet, income statement, or growth analysis.
+The active repo now supports a period-aware fundamentals contract, but the next iteration still needs clearer documentation and broader downstream reuse for historical balance sheet, income statement, and growth analysis.
 
 Recommended next-step fields for a time-aware fundamentals contract:
 

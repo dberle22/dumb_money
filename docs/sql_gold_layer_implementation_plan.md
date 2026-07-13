@@ -1,5 +1,18 @@
 # SQL-First Gold Layer Implementation Plan
 
+## Priority Note
+
+This plan is the preferred direction for the broad-universe analytical gold layer, but it is not intended to block the next immediate roadmap steps.
+
+Immediate sequencing should be:
+
+1. Sprint 7 portfolio foundation
+2. Sprint 10 data expansion
+3. Sprint 11 lens modules
+4. Sprint 12 decision brief
+
+The SQL-first gold rebuild should therefore be approached as an evolution of the existing Sprint 6 mart foundation, starting with the stock snapshot contract and expanding outward once the next product-facing handoffs are stable.
+
 ## Goal
 
 Implement the proposed stock-analysis gold layer as DuckDB SQL models that run after ingestion has materialized the canonical input tables.
@@ -96,6 +109,14 @@ Set up the SQL conventions and implement the current gold surface in SQL before 
 1. `gold_ticker_metrics_mart` should be replaced or aliased by `gold_stock_snapshot`
 2. gold builds should target broad-universe runs, not single-ticker runs
 3. every gold table should be rebuildable from DuckDB canonical tables only
+
+### Near-Term Recommendation
+
+For the first implementation pass, prioritize:
+
+1. evolving the existing Python-built `gold_ticker_metrics_mart` into the long-term `gold_stock_snapshot` contract
+2. validating SQL parity for that snapshot and for `gold_scorecard_metric_rows`
+3. deferring the larger history, ranking, peer-comparison, and sector-context expansion until the snapshot contract is trusted and the Sprint 10-12 framework work is landed
 
 ## Phase 2: Implement `gold_stock_snapshot`
 

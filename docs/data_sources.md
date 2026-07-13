@@ -167,7 +167,7 @@ Companion references:
 - Refinitiv (LSEG) / Bloomberg — institutional, expensive
 - Visible Alpha — institutional, expensive but very detailed segment-level estimates
 
-**Decision (2026-06-27):** Use yfinance for all estimate data. FMP is not needed for a personal watchlist workflow. yfinance covers everything in Sprint 10 and 11 scope (forward EPS/revenue by quarter, revision counts, eps trend, earnings surprise history, price targets). FMP would only add value if 5-year forward projections become necessary for DCF sensitivity analysis — revisit then.
+**Decision (2026-06-27):** Use yfinance for all estimate data in active Sprint 10 and 11 work. FMP is not needed for the initial personal-watchlist workflow. yfinance covers everything currently in scope (forward EPS/revenue by quarter, revision counts, eps trend, earnings surprise history, price targets). Keep FMP as a documented backup option only if yfinance estimate coverage proves unreliable or if 5-year forward projections become necessary for later DCF sensitivity work.
 
 ---
 
@@ -208,6 +208,19 @@ Companion references:
 - FINRA files are the authoritative free source for short interest history; no API key or registration required
 - FINRA OTC file and exchange files are separate downloads; both needed for full coverage
 - Automated download is straightforward but should be added after the local-file ingestion contract is validated on the watchlist
+
+---
+
+## Planning Note
+
+For the near-term roadmap, the intended sequence is:
+
+1. Sprint 7 portfolio foundation
+2. Sprint 10 data expansion
+3. Sprint 11 lens framework
+4. Sprint 12 single-ticker decision brief
+
+The broader SQL-first gold-layer rebuild remains an adjacent evolution track. It should improve the reusable analytical surface over time, but it is not a prerequisite to begin Sprints 7 or 10-12.
 
 ---
 

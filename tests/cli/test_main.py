@@ -168,6 +168,93 @@ def test_universe_command_dispatches_to_ingestion(monkeypatch) -> None:
     }
 
 
+def test_portfolio_import_command_dispatches_to_ingestion(monkeypatch, capsys) -> None:
+    calls: dict[str, object] = {}
+
+    def fake_ingest_portfolio_holdings(input_path, *, portfolio_id=None, as_of_date=None):
+        calls["input_path"] = input_path
+        calls["portfolio_id"] = portfolio_id
+        calls["as_of_date"] = as_of_date
+        return pd.DataFrame(
+            {
+                "portfolio_id": ["default"],
+                "ticker": ["AAPL"],
+            }
+        )
+
+    monkeypatch.setattr(cli_main_module, "ingest_portfolio_holdings", fake_ingest_portfolio_holdings)
+
+    exit_code = cli_main_module.main(
+        [
+            "portfolio-import",
+            "--input-path",
+            "holdings.csv",
+            "--portfolio-id",
+            "default",
+            "--as-of-date",
+            "2024-07-01",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert calls == {
+        "input_path": "holdings.csv",
+        "portfolio_id": "default",
+        "as_of_date": date(2024, 7, 1),
+    }
+    assert "rows=1" in captured.out
+
+
+def test_portfolio_summary_command_prints_candidate_fit(monkeypatch, capsys) -> None:
+    def fake_build_portfolio_summary(portfolio_id="default", *, candidate_ticker=None):
+        assert portfolio_id == "default"
+        assert candidate_ticker == "NVDA"
+        return {
+            "portfolio_id": "default",
+            "concentration_metrics": {"holding_count": 3, "top_1_weight": 0.5, "top_3_weight": 1.0},
+            "sector_exposure": pd.DataFrame([{"sector": "Technology", "holding_count": 2, "market_value": 8000, "weight": 0.8}]),
+            "benchmark_comparison": pd.DataFrame([{"window": "1y", "portfolio_return": 0.15, "SPY_return": 0.12}]),
+            "candidate_fit": {
+                "candidate_ticker": "NVDA",
+                "diversification_role": "adds_to_existing_sector",
+                "sector_weight_before": 0.8,
+                "industry_weight_before": 0.0,
+            },
+        }
+
+    monkeypatch.setattr(cli_main_module, "build_portfolio_summary", fake_build_portfolio_summary)
+
+    exit_code = cli_main_module.main(["portfolio-summary", "--portfolio-id", "default", "--candidate-ticker", "NVDA"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "candidate_ticker=NVDA" in captured.out
+    assert "diversification_role=adds_to_existing_sector" in captured.out
+    assert "portfolio_return" in captured.out
+
+
+def test_watchlist_summary_command_prints_table(monkeypatch, capsys) -> None:
+    def fake_build_watchlist_summary(candidate_tickers, *, portfolio_id="default"):
+        assert candidate_tickers == ["NVDA", "AMZN"]
+        assert portfolio_id == "default"
+        return pd.DataFrame(
+            [
+                {"candidate_ticker": "NVDA", "diversification_role": "adds_to_existing_sector", "total_score": 84.0},
+                {"candidate_ticker": "AMZN", "diversification_role": "new_exposure", "total_score": 78.0},
+            ]
+        )
+
+    monkeypatch.setattr(cli_main_module, "build_watchlist_summary", fake_build_watchlist_summary)
+
+    exit_code = cli_main_module.main(["watchlist-summary", "--portfolio-id", "default", "--tickers", "NVDA,AMZN"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "candidate_ticker" in captured.out
+    assert "NVDA" in captured.out
+
+
 def test_ingest_basket_command_dispatches_to_shared_workflow(monkeypatch, capsys) -> None:
     calls: dict[str, object] = {}
 

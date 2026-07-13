@@ -21,6 +21,10 @@ from dumb_money.ingestion.universe import (
     load_nasdaq_listed_frame,
     load_other_listed_frame,
 )
+from dumb_money.ingestion.portfolios import (
+    ingest_portfolio_holdings,
+    normalize_holdings_frame,
+)
 
 __all__ = [
     "ingest_benchmark_member_fundamentals",
@@ -29,6 +33,7 @@ __all__ = [
     "ingest_benchmark_prices",
     "ingest_fundamentals",
     "ingest_prices",
+    "ingest_portfolio_holdings",
     "ingest_selected_fundamentals",
     "ingest_selected_prices",
     "ingest_listed_security_sources",
@@ -36,5 +41,6 @@ __all__ = [
     "load_other_listed_frame",
     "normalize_benchmark_definitions",
     "normalize_fundamentals_payload",
+    "normalize_holdings_frame",
     "normalize_price_history_frame",
 ]

@@ -18,6 +18,14 @@ from dumb_money.analytics.company import (
     calculate_trend_metrics,
     prepare_price_history,
 )
+from dumb_money.analytics.portfolio import (
+    build_candidate_fit_summary,
+    build_portfolio_benchmark_comparison,
+    build_portfolio_concentration_metrics,
+    build_portfolio_exposure,
+    build_watchlist_decision_table,
+    enrich_portfolio_holdings,
+)
 from dumb_money.analytics.scorecard import (
     DEFAULT_PRIMARY_BENCHMARK,
     DEFAULT_SECTOR_BENCHMARK_MAP,
@@ -35,9 +43,14 @@ __all__ = [
     "build_benchmark_comparison",
     "build_drawdown_series",
     "build_company_scorecard",
+    "build_candidate_fit_summary",
+    "build_portfolio_benchmark_comparison",
     "build_fundamentals_summary",
     "build_indexed_price_series",
     "build_moving_average_series",
+    "build_portfolio_concentration_metrics",
+    "build_portfolio_exposure",
+    "build_watchlist_decision_table",
     "build_peer_summary_stats",
     "build_peer_return_comparison",
     "build_peer_return_summary_stats",
@@ -46,6 +59,7 @@ __all__ = [
     "calculate_return_windows",
     "calculate_risk_metrics",
     "calculate_trend_metrics",
+    "enrich_portfolio_holdings",
     "prepare_price_history",
     "resolve_secondary_benchmark",
 ]

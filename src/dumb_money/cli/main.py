@@ -9,10 +9,12 @@ from typing import Sequence
 from dumb_money.ingestion import (
     ingest_benchmark_definitions,
     ingest_benchmark_prices,
+    ingest_portfolio_holdings,
     ingest_selected_fundamentals,
     ingest_selected_prices,
     ingest_listed_security_sources,
 )
+from dumb_money.research import build_portfolio_summary, build_watchlist_summary
 from dumb_money.ingestion.baskets import (
     DEFAULT_BASKET_BATCH_SIZE,
     build_basket_status_summary,
@@ -120,6 +122,28 @@ def build_parser() -> argparse.ArgumentParser:
     universe_parser.add_argument("--nasdaq-listed-path", required=True)
     universe_parser.add_argument("--other-listed-path", required=True)
     universe_parser.add_argument("--as-of-date", type=_date_value)
+
+    portfolio_import_parser = subparsers.add_parser(
+        "portfolio-import",
+        help="Validate and ingest a holdings CSV into the canonical portfolio table.",
+    )
+    portfolio_import_parser.add_argument("--input-path", required=True)
+    portfolio_import_parser.add_argument("--portfolio-id")
+    portfolio_import_parser.add_argument("--as-of-date", type=_date_value)
+
+    portfolio_summary_parser = subparsers.add_parser(
+        "portfolio-summary",
+        help="Print a simple portfolio concentration and exposure summary.",
+    )
+    portfolio_summary_parser.add_argument("--portfolio-id", default="default")
+    portfolio_summary_parser.add_argument("--candidate-ticker")
+
+    watchlist_summary_parser = subparsers.add_parser(
+        "watchlist-summary",
+        help="Print a simple portfolio-aware watchlist decision table.",
+    )
+    watchlist_summary_parser.add_argument("--portfolio-id", default="default")
+    watchlist_summary_parser.add_argument("--tickers", required=True, type=_csv_list)
 
     stage_parser = subparsers.add_parser("stage", help="Build normalized staging datasets.")
     stage_parser.add_argument(
@@ -284,6 +308,50 @@ def main(argv: Sequence[str] | None = None) -> int:
             other_listed_path=args.other_listed_path,
             as_of_date=args.as_of_date,
         )
+        return 0
+
+    if args.command == "portfolio-import":
+        holdings = ingest_portfolio_holdings(
+            args.input_path,
+            portfolio_id=args.portfolio_id,
+            as_of_date=args.as_of_date,
+        )
+        print(f"rows={len(holdings)}")
+        print(f"portfolio_ids={','.join(sorted(holdings['portfolio_id'].astype(str).unique()))}")
+        print(f"tickers={len(holdings['ticker'].astype(str).str.upper().unique())}")
+        return 0
+
+    if args.command == "portfolio-summary":
+        summary = build_portfolio_summary(
+            portfolio_id=args.portfolio_id,
+            candidate_ticker=args.candidate_ticker,
+        )
+        metrics = summary["concentration_metrics"]
+        print(f"portfolio_id={summary['portfolio_id']}")
+        print(f"holding_count={metrics.get('holding_count')}")
+        print(f"top_1_weight={metrics.get('top_1_weight')}")
+        print(f"top_3_weight={metrics.get('top_3_weight')}")
+        if not summary["sector_exposure"].empty:
+            print(summary["sector_exposure"].to_string(index=False))
+        if not summary["benchmark_comparison"].empty:
+            print(summary["benchmark_comparison"].to_string(index=False))
+        if args.candidate_ticker and "candidate_fit" in summary:
+            fit = summary["candidate_fit"]
+            print(f"candidate_ticker={fit.get('candidate_ticker')}")
+            print(f"diversification_role={fit.get('diversification_role')}")
+            print(f"sector_weight_before={fit.get('sector_weight_before')}")
+            print(f"industry_weight_before={fit.get('industry_weight_before')}")
+        return 0
+
+    if args.command == "watchlist-summary":
+        watchlist = build_watchlist_summary(
+            args.tickers,
+            portfolio_id=args.portfolio_id,
+        )
+        if watchlist.empty:
+            print("No watchlist rows available")
+        else:
+            print(watchlist.to_string(index=False))
         return 0
 
     if args.command == "stage":
